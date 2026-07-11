@@ -388,6 +388,25 @@ def build_molmoact2_so100_so101() -> Tuple[List[RawMixtureEntry], Dict[str, Dict
         n_action_steps=30,
     )
 
+def build_molmoact2_panda_drawer() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    return build_single_lerobot_mixture(
+        name="panda_drawer",
+        tag="panda_drawer",
+        repo_ids=["panda_drawer_molmoact2_v3"],
+        action_key="action",
+        state_keys=["observation.state"],
+        camera_keys=[
+            "observation.images.gripper_cam.rgb",
+            "observation.images.left_cam.left",
+            "observation.images.right_cam.left",
+        ],
+        normalize_gripper=False,
+        setup_type="single franka panda robot arm opening a drawer",
+        control_mode="absolute joint pose",
+        action_horizon=30,
+        action_dim=8,
+        n_action_steps=30,
+    )
 
 MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "pre_post_train": build_molmoact2_pre_post_train,
@@ -396,4 +415,5 @@ MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "libero_goal": build_molmoact2_libero_goal,
     "yam": build_molmoact2_yam,
     "so100_so101": build_molmoact2_so100_so101,
+    "panda_drawer": build_molmoact2_panda_drawer,
 }

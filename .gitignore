@@ -8,7 +8,7 @@ data/
 outputs/
 logs/
 wandb/
-
+datasets/
 
 # Python
 __pycache__/
@@ -58,3 +58,11 @@ sim_eval/outputs/
 # Scratch / duplicates
 *.tmp
 * copy.*
+
+
+#env files
+experiments/pandaenv
+experiments/pandaenv312
+
+#cache 
+*.cache*

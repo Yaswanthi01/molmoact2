@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --job-name=molmoact2-panda-smoke
+#SBATCH --account=ka
+#SBATCH --partition=gpu_h100_short
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=120G
+#SBATCH --time=00:30:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+set -euo pipefail
+
+cd "$HOME/molmoact2/experiments"
+source "$HOME/molmoact2/.venv/bin/activate"
+
+export LEROBOT_DATA_ROOT="$HOME/molmoact2/datasets"
+export LEROBOT_VIDEO_BACKEND=pyav
+export HF_HOME="$HOME/molmoact2/.cache/huggingface"
+export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
+
+mkdir -p logs "$HOME/molmoact2/checkpoints" "$HF_HOME"
+
+torchrun --standalone --nproc-per-node=1 \
+  launch_scripts/train_lerobot.py \
+  allenai/MolmoAct2 \
+  panda_drawer \
+  --max_duration=1 \
+  --log_interval=1 \
+  --device_batch_size=1 \
+  --global_batch_size=1 \
+  --num_workers=0 \
+  --pin_memory=false \
+  --save_folder="$HOME/molmoact2/checkpoints/panda-smoke" \
+  --packing=false \
+  --dynamic_seq_len=true \
+  --ft_vlm=false \
+  --ft_action_expert=true \
+  --ft_embedding=none
