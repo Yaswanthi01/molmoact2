@@ -13,7 +13,7 @@ import av
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DATASET_ROOT = REPO_ROOT / "datasets" / "panda_drawer_molmoact2_v3"
+DEFAULT_DATASET_ROOT = REPO_ROOT / "datasets" / "panda_drawer_ee_molmoact2_v3"
 
 
 def parse_args() -> argparse.Namespace:

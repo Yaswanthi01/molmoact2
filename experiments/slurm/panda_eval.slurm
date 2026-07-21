@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=molmoact2-panda-ee-smoke
+#SBATCH --job-name=molmoact2-panda-ee-eval
 #SBATCH --account=ka
 #SBATCH --partition=gpu_h100_short
 #SBATCH --gres=gpu:1
@@ -25,26 +25,28 @@ export MOLMO_DATA_DIR="$HOME/molmoact2/datasets"
 export LEROBOT_VIDEO_BACKEND=pyav
 export HF_HOME="$HOME/molmoact2/.cache/huggingface"
 export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
-export WANDB_PROJECT="molmoact2-panda-ee-smoke"
-export WANDB_ENTITY="local"
-export WANDB_MODE="offline"
 
-mkdir -p logs "$HOME/molmoact2/checkpoints" "$HF_HOME"
+CHECKPOINT="$HOME/molmoact2/checkpoints/panda-ee-pilot/step100"
+OUTPUT_DIR="$HOME/molmoact2/evaluations/panda-ee-pilot-step100-episode0"
 
-torchrun --standalone --nproc-per-node=1 \
-  launch_scripts/train_lerobot.py \
-  allenai/MolmoAct2 \
-  panda_drawer_ee \
-  --frame_loading_backend=av \
-  --max_duration=1 \
-  --log_interval=1 \
-  --device_batch_size=1 \
-  --global_batch_size=1 \
-  --num_workers=0 \
-  --pin_memory=false \
-  --save_folder="$HOME/molmoact2/checkpoints/panda-ee-smoke" \
-  --packing=false \
-  --dynamic_seq_len=true \
-  --ft_vlm=false \
-  --ft_action_expert=true \
-  --ft_embedding=none
+if [[ ! -d "$CHECKPOINT" ]]; then
+  echo "Checkpoint not found: $CHECKPOINT" >&2
+  echo "Available checkpoints:" >&2
+  find "$HOME/molmoact2/checkpoints/panda-ee-pilot" -maxdepth 1 -type d -name 'step*' -print >&2 || true
+  exit 1
+fi
+
+mkdir -p logs "$OUTPUT_DIR" "$HF_HOME"
+
+python scripts/run_open_loop_inference_lerobot.py \
+  --dataset panda_drawer_ee_molmoact2_v3 \
+  --dataset_root "$HOME/molmoact2/datasets/panda_drawer_ee_molmoact2_v3" \
+  --episode_idx 0 \
+  --episode_frames 0,10 \
+  --checkpoint "$CHECKPOINT" \
+  --output_dir "$OUTPUT_DIR" \
+  --policy_type molmoact2 \
+  --norm_tag panda_drawer_ee \
+  --video_backend pyav \
+  --device cuda \
+  --verbose

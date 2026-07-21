@@ -62,11 +62,11 @@ IMAGE_KEY_PRESETS = {
         "zed_gripper_left",
         "zed_high_left_left"
     ],
-    "panda_drawer": [
-    "gripper_cam.rgb",
-    "left_cam.left",
-    "right_cam.left",
-],
+    "panda_drawer_ee": [
+        "gripper_cam.rgb",
+        "left_cam.left",
+        "right_cam.left",
+    ],
 }
 
 

@@ -44,7 +44,7 @@ huggingface-cli download kitalr/panda_drawer_many_ee_fullres_v3.0 \
 
 python experiments/scripts/prepare_panda_drawer_dataset.py \
   --source datasets/panda_drawer_many_ee_fullres_v3.0 \
-  --output datasets/panda_drawer_molmoact2_v3 \
+  --output datasets/panda_drawer_ee_molmoact2_v3 \
   --overwrite
 
 python experiments/scripts/validate_panda_videos.py
@@ -57,7 +57,7 @@ For a local machine where disk space matters, you can symlink videos instead of 
 ```bash
 python experiments/scripts/prepare_panda_drawer_dataset.py \
   --source datasets/panda_drawer_many_ee_fullres_v3.0 \
-  --output datasets/panda_drawer_molmoact2_v3 \
+  --output datasets/panda_drawer_ee_molmoact2_v3 \
   --overwrite \
   --symlink-videos
 ```
@@ -103,7 +103,7 @@ torchrun \
   --master-port=29501 \
   launch_scripts/train_lerobot.py \
   allenai/MolmoAct2 \
-  panda_drawer \
+  panda_drawer_ee \
   --max_duration=1 \
   --log_interval=1 \
   --device_batch_size=1 \
@@ -156,7 +156,7 @@ Edit `experiments/slurm/panda_smoke.slurm` if your cluster uses different accoun
 experiments/launch_scripts/data_mixtures.py
 ```
 
-Registers the `panda_drawer` MolmoAct2/LeRobot training mixture. It maps the prepared dataset to:
+Registers the `panda_drawer_ee` MolmoAct2/LeRobot training mixture. It maps the prepared dataset to:
 
 - state key: `observation.state`
 - action key: `action`
@@ -166,7 +166,7 @@ Registers the `panda_drawer` MolmoAct2/LeRobot training mixture. It maps the pre
   - `observation.images.right_cam.left`
 - action dimension: `8`
 - action horizon: `30`
-- control mode: absolute joint pose
+- control mode: absolute end-effector pose
 
 ```text
 experiments/scripts/prepare_panda_drawer_dataset.py
@@ -175,7 +175,7 @@ experiments/scripts/prepare_panda_drawer_dataset.py
 Creates the MolmoAct2-ready local dataset:
 
 ```text
-datasets/panda_drawer_molmoact2_v3
+datasets/panda_drawer_ee_molmoact2_v3
 ```
 
 from the source dataset:
@@ -188,10 +188,12 @@ It leaves the source dataset untouched. It adds:
 
 ```text
 observation.state = observation.proprio.joint_pos + observation.proprio.gripper
-action = action.joint_pos + action.gripper
+action = action.ee_pos + action.ee_rot + action.gripper
 ```
 
-Both output vectors have shape `(8,)`: 7 Panda joint positions plus 1 gripper value.
+Both output vectors have shape `(8,)`. State contains 7 Panda joint positions plus
+1 gripper value; action contains 3 end-effector positions, the source's 4D rotation representation, and
+1 gripper value. `action.joint_pos` and all `observation.target.*` fields are ignored.
 
 ```text
 experiments/scripts/validate_panda_videos.py
@@ -212,7 +214,7 @@ experiments/scripts/preflight_panda_wrapper.py
 
 Builds the real MolmoAct2 LeRobot wrapper and checks:
 
-- wrapper can load `panda_drawer_molmoact2_v3`
+- wrapper can load `panda_drawer_ee_molmoact2_v3`
 - state shape is `(8,)`
 - action chunk shape is `(30, 8)`
 - three images are returned
@@ -234,7 +236,7 @@ Loads the MolmoAct2 config/processor path and checks:
 experiments/scripts/serve_policy.py
 ```
 
-Adds the `panda_drawer` camera preset for inference/server use.
+Adds the `panda_drawer_ee` camera preset for inference/server use.
 
 ```text
 experiments/slurm/panda_smoke.slurm
@@ -246,6 +248,6 @@ Example SLURM smoke-test job for one GPU. Adjust account, partition, memory, and
 
 - Do not commit `datasets/`, `checkpoints/`, `logs/`, `.cache/`, or virtual environments.
 - The prepared dataset is local and reproducible from the Hugging Face source dataset.
-- The training mixture name is `panda_drawer`.
-- The prepared LeRobot dataset id is `panda_drawer_molmoact2_v3`.
+- The training mixture name is `panda_drawer_ee`.
+- The prepared LeRobot dataset id is `panda_drawer_ee_molmoact2_v3`.
 - The model checkpoint used in the smoke commands is `allenai/MolmoAct2`.

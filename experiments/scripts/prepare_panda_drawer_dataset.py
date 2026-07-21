@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Prepare the Panda drawer LeRobot v3.0 dataset for MolmoAct2 fine-tuning.
 
-The source dataset has split robot columns:
+The source dataset has split robot columns. This pipeline uses end-effector
+actions, as required by the Panda controller interface:
 
     observation.proprio.joint_pos, observation.proprio.gripper
-    action.joint_pos, action.gripper
+    action.ee_pos, action.ee_rot, action.gripper
 
 MolmoAct2's training mixture expects one state key and one action key, so this
 script creates a local copy with:
 
     observation.state = concat(observation.proprio.joint_pos,
                                observation.proprio.gripper)
-    action = concat(action.joint_pos, action.gripper)
+    action = concat(action.ee_pos, action.ee_rot, action.gripper)
 
 The source dataset is left untouched.
 """
@@ -30,10 +31,10 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = REPO_ROOT / "datasets" / "panda_drawer_many_ee_fullres_v3.0"
-DEFAULT_OUTPUT = REPO_ROOT / "datasets" / "panda_drawer_molmoact2_v3"
+DEFAULT_OUTPUT = REPO_ROOT / "datasets" / "panda_drawer_ee_molmoact2_v3"
 
 STATE_KEYS = ("observation.proprio.joint_pos", "observation.proprio.gripper")
-ACTION_KEYS = ("action.joint_pos", "action.gripper")
+ACTION_KEYS = ("action.ee_pos", "action.ee_rot", "action.gripper")
 OUTPUT_STATE_KEY = "observation.state"
 OUTPUT_ACTION_KEY = "action"
 
@@ -168,19 +169,25 @@ def _update_metadata(output: Path) -> None:
         "shape": [8],
         "dtype": "float32",
         "names": [
-            "joint_0",
-            "joint_1",
-            "joint_2",
-            "joint_3",
-            "joint_4",
-            "joint_5",
-            "joint_6",
+            "ee_x",
+            "ee_y",
+            "ee_z",
+            "ee_rot_0",
+            "ee_rot_1",
+            "ee_rot_2",
+            "ee_rot_3",
             "gripper",
         ],
     }
     for feature in features.values():
         if feature.get("dtype") == "video":
             feature["info"]["video.codec"] = "av1"
+            shape = tuple(feature.get("shape", ()))
+            if not feature.get("names") and len(shape) == 3:
+                if shape[-1] in {1, 3, 4}:
+                    feature["names"] = ["height", "width", "channels"]
+                elif shape[0] in {1, 3, 4}:
+                    feature["names"] = ["channels", "height", "width"]
     info["robot_type"] = info.get("robot_type") or "franka_panda"
     _write_json(info_path, info)
 
@@ -226,7 +233,7 @@ def main() -> None:
     print(f"Rows updated: {rows}")
     print("Added keys:")
     print(f"  {OUTPUT_STATE_KEY} = {STATE_KEYS[0]} + {STATE_KEYS[1]}")
-    print(f"  {OUTPUT_ACTION_KEY} = {ACTION_KEYS[0]} + {ACTION_KEYS[1]}")
+    print(f"  {OUTPUT_ACTION_KEY} = {' + '.join(ACTION_KEYS)}")
 
 
 if __name__ == "__main__":

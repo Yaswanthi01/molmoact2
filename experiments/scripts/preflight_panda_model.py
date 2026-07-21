@@ -14,7 +14,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS_ROOT = REPO_ROOT / "experiments"
 DATA_ROOT = REPO_ROOT / "datasets"
-DATASET_REPO_ID = "panda_drawer_molmoact2_v3"
+DATASET_REPO_ID = "panda_drawer_ee_molmoact2_v3"
 CACHE_ROOT = REPO_ROOT / ".cache" / "panda_model_preflight"
 
 os.environ.setdefault("HF_HOME", str(CACHE_ROOT / "huggingface"))
@@ -49,7 +49,7 @@ def main() -> None:
     if not (dataset_root / "meta" / "info.json").is_file():
         raise SystemExit(f"Prepared dataset not found: {dataset_root}")
 
-    plan = get_lerobot_training_data_plan("panda_drawer")
+    plan = get_lerobot_training_data_plan("panda_drawer_ee")
     tag_metadata = _normalize_registered_lerobot_tag_metadata(TAG_METADATA_BY_TAG)
     stats_by_tag, repo_to_tag, _ = _collect_tagged_stats(
         plan.robot_mixture,

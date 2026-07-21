@@ -171,6 +171,20 @@ def _normalize_dataset_name(dataset_name: str) -> str:
     return dataset_name[len("lerobot:") :] if dataset_name.startswith("lerobot:") else dataset_name
 
 
+def _ensure_visual_feature_names(dataset: LeRobotDataset) -> None:
+    """Backfill axis names for valid v3 video metadata that omits them."""
+    for feature in dataset.meta.features.values():
+        if feature.get("dtype") not in {"image", "video"} or feature.get("names"):
+            continue
+        shape = tuple(feature.get("shape", ()))
+        if len(shape) != 3:
+            continue
+        if shape[-1] in {1, 3, 4}:
+            feature["names"] = ["height", "width", "channels"]
+        elif shape[0] in {1, 3, 4}:
+            feature["names"] = ["channels", "height", "width"]
+
+
 def _resolve_dataset_root(repo_id: str, dataset_root: Optional[str]) -> Optional[Path]:
     if dataset_root is None:
         return None
@@ -827,6 +841,7 @@ def main() -> None:
         root=resolved_root,
         video_backend=args.video_backend,
     )
+    _ensure_visual_feature_names(dataset)
     cfg, policy, preprocessor, postprocessor = _load_policy_and_processors(
         args.checkpoint,
         dataset,

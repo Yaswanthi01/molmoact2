@@ -29,7 +29,7 @@ from launch_scripts.lerobot_utils.train_plan import (
 from olmo.data.lerobot_wrapper import build_lerobot_dataset
 
 
-DATASET_REPO_ID = "panda_drawer_molmoact2_v3"
+DATASET_REPO_ID = "panda_drawer_ee_molmoact2_v3"
 DATASET_NAME = f"lerobot:{DATASET_REPO_ID}"
 DATA_ROOT = REPO_ROOT / "datasets"
 
@@ -129,8 +129,31 @@ def main() -> None:
     if not (dataset_root / "meta" / "info.json").is_file():
         raise SystemExit(f"Prepared dataset not found: {dataset_root}")
 
-    plan = get_lerobot_training_data_plan("panda_drawer")
+    plan = get_lerobot_training_data_plan("panda_drawer_ee")
     tag_metadata = _normalize_registered_lerobot_tag_metadata(TAG_METADATA_BY_TAG)
+    ee_metadata = tag_metadata["panda_drawer_ee"]
+    assert ee_metadata["action_key"] == "action"
+    assert ee_metadata["state_keys"] == ["observation.state"]
+    assert ee_metadata["control_mode"] == "absolute end-effector pose"
+    assert ee_metadata["action_dim"] == 8
+    assert ee_metadata["camera_keys"] == [
+        "observation.images.gripper_cam.rgb",
+        "observation.images.left_cam.left",
+        "observation.images.right_cam.left",
+    ]
+
+    with (dataset_root / "meta" / "info.json").open("r", encoding="utf-8") as f:
+        dataset_info = json.load(f)
+    assert dataset_info["features"]["action"]["names"] == [
+        "ee_x",
+        "ee_y",
+        "ee_z",
+        "ee_rot_0",
+        "ee_rot_1",
+        "ee_rot_2",
+        "ee_rot_3",
+        "gripper",
+    ]
     stats_by_tag, repo_to_tag, default_tag = _collect_tagged_stats(
         plan.robot_mixture,
         root_base=str(DATA_ROOT),
