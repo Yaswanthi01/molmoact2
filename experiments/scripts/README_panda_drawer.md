@@ -72,6 +72,18 @@ MOLMOACT2 WRAPPER PREFLIGHT PASSED
 PANDA MODEL CONFIGURATION AND COLLATION PREFLIGHT PASSED
 ```
 
+Run the complete verification sequence with one command:
+
+```bash
+python experiments/scripts/verify_panda_ee_pipeline.py
+```
+
+For a faster check that skips exhaustive MP4 decoding:
+
+```bash
+python experiments/scripts/verify_panda_ee_pipeline.py --quick
+```
+
 The virtual environment is intentionally not committed. Everyone using this repo should create their own environment and install the requirements with the commands above.
 
 If the dataset is private or gated, log in first:
