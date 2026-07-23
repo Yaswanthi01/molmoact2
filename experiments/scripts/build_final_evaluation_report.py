@@ -89,7 +89,7 @@ def metric_for_names(
 ) -> tuple[list[str], float]:
     selected = [
         (name, value)
-        for name, value in zip(names, per_dim, strict=True)
+        for name, value in zip(names, per_dim)
         if name in selected_names
     ]
     if not selected:
@@ -199,7 +199,7 @@ def main() -> None:
 
     per_dimension = {
         name: {"mse": value, "rmse": rmse(value)}
-        for name, value in zip(action_names, raw_per_dim, strict=True)
+        for name, value in zip(action_names, raw_per_dim)
     }
 
     final_report = {
