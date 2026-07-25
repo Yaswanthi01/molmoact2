@@ -79,7 +79,7 @@ torchrun --standalone --nproc-per-node=1 \
   panda_drawer_ee \
   --frame_loading_backend=av \
   --max_duration=50000 \
-  --time_limit=1500 \
+  --time_limit=1200 \
   --canceled_check_interval=1 \
   --log_interval=10 \
   --device_batch_size=1 \
