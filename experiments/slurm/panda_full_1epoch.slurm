@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-panda-ee-full-1ep
 #SBATCH --account=ka
-#SBATCH --partition=gpu_h100_short
+#SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=00:30:00
+#SBATCH --time=00:28:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
@@ -35,15 +35,18 @@ SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_full_1epoch.slurm"
 mkdir -p logs "$SAVE_FOLDER" "$HF_HOME"
 
 # The dataset has 71,019 frames. At global batch size 8, 8,878 optimizer
-# steps cover approximately one epoch. The trainer stops after 1,400 seconds
-# and saves a resumable checkpoint, leaving time before SLURM's 30-minute kill.
+# steps cover approximately one epoch. By default, each job stops after 1,500
+# seconds and saves a resumable checkpoint before SLURM's 28-minute limit.
+echo "Training target: step${TARGET_STEPS}"
+echo "Checkpoint interval: 500 steps"
+echo "Per-job trainer timeout: 1500 seconds"
 torchrun --standalone --nproc-per-node=1 \
   launch_scripts/train_lerobot.py \
   allenai/MolmoAct2 \
   panda_drawer_ee \
   --frame_loading_backend=av \
   --max_duration=8878 \
-  --time_limit=1400 \
+  --time_limit=1500 \
   --canceled_check_interval=1 \
   --log_interval=10 \
   --device_batch_size=1 \
