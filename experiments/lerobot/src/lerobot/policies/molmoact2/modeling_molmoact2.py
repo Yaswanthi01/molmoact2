@@ -893,7 +893,20 @@ class MolmoAct2Policy(PreTrainedPolicy):
 
     def _call_generate_inference_result(self, *args, **kwargs) -> tuple[MolmoAct2InferenceResult, float]:
         inference_start = time.perf_counter()
-        result = self._generate_inference_result(*args, **kwargs)
+        handles = self._handles
+        if handles is None:
+            raise RuntimeError("MolmoAct2 handles not initialized.")
+        model_dtype = next(handles.model.parameters()).dtype
+        autocast_enabled = handles.device.type == "cuda" and model_dtype in {
+            torch.bfloat16,
+            torch.float16,
+        }
+        with torch.autocast(
+            device_type=handles.device.type,
+            dtype=model_dtype,
+            enabled=autocast_enabled,
+        ):
+            result = self._generate_inference_result(*args, **kwargs)
         return result, time.perf_counter() - inference_start
 
     def get_optim_params(self) -> dict:
