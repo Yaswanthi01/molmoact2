@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         help="Expected number of episode summaries (default: 101).",
     )
     parser.add_argument(
+        "--expected-episode-ids",
+        default=None,
+        help="Comma-separated episode IDs. Overrides the contiguous 0..N-1 expectation.",
+    )
+    parser.add_argument(
         "--allow-incomplete",
         action="store_true",
         help="Evaluate available episodes even if expected episodes are missing.",
@@ -60,6 +65,20 @@ def parse_args() -> argparse.Namespace:
 
 def safe_divide(numerator: int, denominator: int) -> float | None:
     return None if denominator == 0 else numerator / denominator
+
+
+def parse_expected_ids(value: str | None, expected_episodes: int) -> set[int]:
+    if value is None:
+        if expected_episodes < 1:
+            raise SystemExit("--expected-episodes must be positive")
+        return set(range(expected_episodes))
+    try:
+        ids = [int(part.strip()) for part in value.split(",") if part.strip()]
+    except ValueError as exc:
+        raise SystemExit("--expected-episode-ids must contain comma-separated integers") from exc
+    if not ids or any(idx < 0 for idx in ids) or len(ids) != len(set(ids)):
+        raise SystemExit("--expected-episode-ids must contain unique, non-negative IDs")
+    return set(ids)
 
 
 def find_gripper_dim(summary: dict[str, Any], path: Path) -> int:
@@ -152,7 +171,7 @@ def main() -> None:
             )
         episodes[episode_idx] = (predicted, ground_truth)
 
-    expected_ids = set(range(args.expected_episodes))
+    expected_ids = parse_expected_ids(args.expected_episode_ids, args.expected_episodes)
     found_ids = set(episodes)
     missing_ids = sorted(expected_ids - found_ids)
     unexpected_ids = sorted(found_ids - expected_ids)
@@ -213,7 +232,8 @@ def main() -> None:
 
     report = {
         "evaluation_root": str(root),
-        "expected_episodes": args.expected_episodes,
+        "expected_episodes": len(expected_ids),
+        "expected_episode_indices": sorted(expected_ids),
         "evaluated_episodes": len(episodes),
         "evaluated_episode_indices": sorted(episodes),
         "missing_episode_indices": missing_ids,
@@ -247,9 +267,11 @@ def main() -> None:
     }
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary_output = output.with_suffix(output.suffix + ".tmp")
+    temporary_output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary_output.replace(output)
 
-    print(f"Episodes evaluated: {len(episodes)}/{args.expected_episodes}")
+    print(f"Episodes evaluated: {len(episodes)}/{len(expected_ids)}")
     print(f"Frames evaluated: {total}")
     print(f"Ground-truth values: {lower_value}, {upper_value}")
     print(f"Binary threshold: {threshold}")

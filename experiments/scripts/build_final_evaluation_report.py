@@ -84,17 +84,17 @@ def rmse(mse: float) -> float:
     return math.sqrt(mse)
 
 
-def metric_for_names(
-    names: list[str], per_dim: list[float], selected_names: set[str]
-) -> tuple[list[str], float]:
-    selected = [
-        (name, value)
-        for name, value in zip(names, per_dim)
-        if name in selected_names
-    ]
-    if not selected:
-        raise SystemExit(f"Could not find action dimensions: {sorted(selected_names)}")
-    return [name for name, _ in selected], mean([value for _, value in selected])
+def infer_action_groups(names: list[str]) -> dict[str, list[int]]:
+    """Infer useful groups without requiring an embodiment-specific schema."""
+    lowered = [name.lower() for name in names]
+    groups: dict[str, list[int]] = {
+        "gripper": [idx for idx, name in enumerate(lowered) if "gripper" in name],
+        "rotation": [idx for idx, name in enumerate(lowered) if "rot" in name or "quat" in name],
+    }
+    position_tokens = {"x", "y", "z", "ee_x", "ee_y", "ee_z", "pos_x", "pos_y", "pos_z"}
+    groups["position"] = [idx for idx, name in enumerate(lowered) if name in position_tokens]
+    groups["non_gripper"] = [idx for idx in range(len(names)) if idx not in groups["gripper"]]
+    return {name: indices for name, indices in groups.items() if indices}
 
 
 def format_metric(value: Any, digits: int = 8) -> str:
@@ -161,30 +161,25 @@ def main() -> None:
     if not all(math.isfinite(value) and value >= 0 for value in raw_per_dim):
         raise SystemExit("Raw per-dimension MSE contains invalid values")
 
-    position_names, position_mse = metric_for_names(
-        action_names, raw_per_dim, {"ee_x", "ee_y", "ee_z"}
-    )
-    rotation_names, rotation_mse = metric_for_names(
-        action_names,
-        raw_per_dim,
-        {"ee_rot_0", "ee_rot_1", "ee_rot_2", "ee_rot_3"},
-    )
-    gripper_names, gripper_mse_from_dims = metric_for_names(
-        action_names, raw_per_dim, {"gripper"}
-    )
+    action_groups = infer_action_groups(action_names)
+    grouped_metrics = {
+        group: {
+            "dimensions": [action_names[idx] for idx in indices],
+            "mse": mean([raw_per_dim[idx] for idx in indices]),
+            "rmse": rmse(mean([raw_per_dim[idx] for idx in indices])),
+        }
+        for group, indices in action_groups.items()
+    }
 
     overall_raw_mse = require_number(metrics, "average_mse_raw", aggregate_path)
-    ee_pose_raw_mse = require_number(
-        metrics, "average_mse_raw_nongripper", aggregate_path
-    )
-    gripper_raw_mse = require_number(
-        metrics, "average_mse_raw_gripper", aggregate_path
-    )
+    ee_pose_raw_mse = metrics.get("average_mse_raw_nongripper")
+    gripper_raw_mse = metrics.get("average_mse_raw_gripper")
     policy_scale_mse = require_number(
         metrics, "average_mse_policy_scale", aggregate_path
     )
-    if not math.isclose(
-        gripper_mse_from_dims, gripper_raw_mse, rel_tol=1e-6, abs_tol=1e-10
+    inferred_gripper_mse = grouped_metrics.get("gripper", {}).get("mse")
+    if gripper_raw_mse is not None and inferred_gripper_mse is not None and not math.isclose(
+        inferred_gripper_mse, float(gripper_raw_mse), rel_tol=1e-6, abs_tol=1e-10
     ):
         raise SystemExit(
             "Gripper MSE does not match the gripper entry in raw per-dimension MSE"
@@ -194,7 +189,7 @@ def main() -> None:
     gripper_error_contribution = (
         None
         if squared_error_sum_across_dims == 0
-        else gripper_raw_mse / squared_error_sum_across_dims
+        else (0.0 if gripper_raw_mse is None else float(gripper_raw_mse) / squared_error_sum_across_dims)
     )
 
     per_dimension = {
@@ -220,13 +215,13 @@ def main() -> None:
             "overall_raw_action_mse": overall_raw_mse,
             "overall_raw_action_rmse": rmse(overall_raw_mse),
             "ee_pose_raw_mse": ee_pose_raw_mse,
-            "ee_pose_raw_rmse": rmse(ee_pose_raw_mse),
-            "ee_position_raw_mse": position_mse,
-            "ee_position_raw_rmse": rmse(position_mse),
-            "ee_rotation_component_raw_mse": rotation_mse,
-            "ee_rotation_component_raw_rmse": rmse(rotation_mse),
+            "ee_pose_raw_rmse": None if ee_pose_raw_mse is None else rmse(float(ee_pose_raw_mse)),
+            "ee_position_raw_mse": grouped_metrics.get("position", {}).get("mse"),
+            "ee_position_raw_rmse": grouped_metrics.get("position", {}).get("rmse"),
+            "ee_rotation_component_raw_mse": grouped_metrics.get("rotation", {}).get("mse"),
+            "ee_rotation_component_raw_rmse": grouped_metrics.get("rotation", {}).get("rmse"),
             "gripper_raw_mse": gripper_raw_mse,
-            "gripper_raw_rmse": rmse(gripper_raw_mse),
+            "gripper_raw_rmse": None if gripper_raw_mse is None else rmse(float(gripper_raw_mse)),
             "gripper_binary_accuracy": binary_metrics.get("accuracy"),
             "gripper_binary_precision": binary_metrics.get("precision_positive"),
             "gripper_binary_recall": binary_metrics.get("recall_positive"),
@@ -238,8 +233,8 @@ def main() -> None:
         "diagnostics": {
             "policy_scale_mse": policy_scale_mse,
             "policy_scale_warning": (
-                "The gripper dimension is not normalized, so raw grouped metrics "
-                "and binary gripper metrics are recommended for interpretation."
+                "Normalization can differ by action dimension. Use raw grouped metrics "
+                "for physical-scale interpretation and binary metrics for discrete grippers."
             ),
             "gripper_fraction_of_summed_raw_dimension_mse": (
                 gripper_error_contribution
@@ -249,9 +244,7 @@ def main() -> None:
                 if gripper_error_contribution is None
                 else 100.0 * gripper_error_contribution
             ),
-            "position_dimensions": position_names,
-            "rotation_dimensions": rotation_names,
-            "gripper_dimensions": gripper_names,
+            "action_groups": grouped_metrics,
         },
         "raw_per_dimension": per_dimension,
         "gripper_binary": {
@@ -266,7 +259,7 @@ def main() -> None:
 
     primary = final_report["primary_metrics"]
     diagnostic = final_report["diagnostics"]
-    markdown = f"""# Final MolmoAct2 Panda Open-Loop Evaluation
+    markdown = f"""# Final Open-Loop Evaluation
 
 ## Evaluation coverage
 

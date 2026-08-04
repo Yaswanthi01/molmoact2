@@ -11,16 +11,24 @@
 
 set -euo pipefail
 
-cd "$HOME/molmoact2/experiments"
-source "$HOME/molmoact2/.venv_molmoact312/bin/activate"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+  REPO_ROOT="${REPO_ROOT:-$SLURM_SUBMIT_DIR}"
+else
+  REPO_ROOT="${REPO_ROOT:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+fi
+EXPERIMENTS_ROOT="$REPO_ROOT/experiments"
+VENV_PATH="${VENV_PATH:-$REPO_ROOT/.venv_molmoact312}"
+cd "$EXPERIMENTS_ROOT"
+source "$VENV_PATH/bin/activate"
 
-export LEROBOT_DATA_ROOT="${LEROBOT_DATA_ROOT:-$HOME/molmoact2/datasets}"
-export MOLMO_DATA_DIR="${MOLMO_DATA_DIR:-$HOME/molmoact2/datasets}"
+export LEROBOT_DATA_ROOT="${LEROBOT_DATA_ROOT:-$REPO_ROOT/datasets}"
+export MOLMO_DATA_DIR="${MOLMO_DATA_DIR:-$REPO_ROOT/datasets}"
 export LEROBOT_VIDEO_BACKEND="${LEROBOT_VIDEO_BACKEND:-pyav}"
-export HF_HOME="${HF_HOME:-$HOME/molmoact2/.cache/huggingface}"
+export HF_HOME="${HF_HOME:-$REPO_ROOT/.cache/huggingface}"
 export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
 
-CONFIG_FILE="${CONFIG_FILE:-$HOME/molmoact2/experiments/slurm/lerobot_eval_single_config.env}"
+CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/lerobot_eval_single_config.env}"
 if [[ -f "$CONFIG_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$CONFIG_FILE"
@@ -29,7 +37,7 @@ fi
 DATASET="${DATASET:-}"
 CHECKPOINT="${CHECKPOINT:-}"
 EPISODE_IDX="${EPISODE_IDX:-0}"
-EVALUATION_ROOT="${EVALUATION_ROOT:-$HOME/molmoact2/evaluations/${DATASET}-eval-single}"
+EVALUATION_ROOT="${EVALUATION_ROOT:-$REPO_ROOT/evaluations/${DATASET}-eval-single}"
 POLICY_TYPE="${POLICY_TYPE:-molmoact2}"
 NORM_TAG="${NORM_TAG:-}"
 if [[ -z "$NORM_TAG" ]]; then
@@ -57,7 +65,7 @@ mkdir -p "$OUTPUT_DIR"
 args=(
   python scripts/run_open_loop_inference_lerobot.py
   --dataset "$DATASET"
-  --dataset_root "$HOME/molmoact2/datasets/$DATASET"
+  --dataset_root "${DATASET_ROOT:-$LEROBOT_DATA_ROOT/$DATASET}"
   --episode_idx "$EPISODE_IDX"
   --checkpoint "$CHECKPOINT"
   --output_dir "$OUTPUT_DIR"
