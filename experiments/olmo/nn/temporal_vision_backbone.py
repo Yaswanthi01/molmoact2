@@ -37,6 +37,7 @@ class TemporalVisionBackbone(MolmoVisionBackbone):
         images = images.view(B * T, N, D)
         if self.config.normalize_on_gpu:
             images = self.image_preprocessor.normalize_image_tensor(images)
+        images = images.to(dtype=self.image_vit.patch_embedding.weight.dtype)
         vit_out = self.image_vit(images, None, pooled_patches_idx, num_images, multimodal_type)
         image_features = vit_out[0]
 

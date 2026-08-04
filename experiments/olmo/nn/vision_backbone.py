@@ -418,6 +418,7 @@ class MolmoVisionBackbone(nn.Module):
         images = images.view(B * T, N, D)
         if self.config.normalize_on_gpu:
             images = self.image_preprocessor.normalize_image_tensor(images)
+        images = images.to(dtype=self.image_vit.patch_embedding.weight.dtype)
         image_features = self.image_vit(images)
 
         if cfg.use_deepstack:
