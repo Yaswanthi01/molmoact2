@@ -70,6 +70,13 @@ IMAGE_KEY_PRESETS = {
 }
 
 
+def _tensor_to_numpy(value: torch.Tensor) -> np.ndarray:
+    value = value.detach().cpu()
+    if value.dtype == torch.bfloat16:
+        value = value.float()
+    return value.numpy()
+
+
 def _require_discrete_action_tokenizer(
     inference_action_mode: str,
     discrete_action_tokenizer: Optional[str],
@@ -200,6 +207,7 @@ def _build_policy(
     *,
     use_hf_ckpt: bool,
     device: Optional[str],
+    dtype: str,
     seq_len: Optional[int],
     num_steps: Optional[int],
     inference_action_mode: str,
@@ -213,6 +221,7 @@ def _build_policy(
     cfg = MolmoAct2Config(
         checkpoint_path=str(Path(checkpoint).expanduser()),
         device=resolved_device,
+        dtype=dtype,
         seq_len=seq_len,
         num_steps=num_steps,
         inference_action_mode=inference_action_mode,
@@ -276,6 +285,7 @@ class MolmoAct2Server:
         checkpoint: str,
         use_hf_ckpt: bool = False,
         device: Optional[str] = None,
+        dtype: str = "bfloat16",
         seq_len: Optional[int] = None,
         num_steps: Optional[int] = None,
         n_action_steps: Optional[int] = None,
@@ -293,6 +303,7 @@ class MolmoAct2Server:
             checkpoint,
             use_hf_ckpt=use_hf_ckpt,
             device=device,
+            dtype=dtype,
             seq_len=seq_len,
             num_steps=num_steps,
             inference_action_mode=inference_action_mode,
@@ -304,6 +315,7 @@ class MolmoAct2Server:
         )
         hf_backend = getattr(self.policy, "_hf_backend", None)
         self.use_hf_ckpt = hf_backend is not None
+        self.dtype = self.policy.config.dtype
         self.verbose = bool(verbose)
         if self.use_hf_ckpt:
             self.device = torch.device(self.policy.config.device or "cpu")
@@ -471,6 +483,7 @@ class MolmoAct2Server:
         return {
             "status": "ok",
             "device": str(self.device),
+            "dtype": self.dtype,
             "default_seq_len": self.default_seq_len,
             "default_num_steps": self.default_num_steps,
             "n_obs_steps": self.n_obs_steps,
@@ -620,7 +633,7 @@ class MolmoAct2Server:
                 action_chunk = result.actions
                 if self.robot_processor is not None:
                     action_chunk = self.robot_processor.unnormalize_action(action_chunk, repo_id=tag)
-                actions_np = action_chunk.detach().cpu().numpy()
+                actions_np = _tensor_to_numpy(action_chunk)
                 response_payload["actions"] = actions_np[0].tolist() if actions_np.ndim >= 3 else actions_np.tolist()
                 response_payload["action_shape"] = list(actions_np.shape)
                 if latest_depth_codes:
@@ -642,7 +655,7 @@ class MolmoAct2Server:
                     latest_depth_codes = self.policy.get_last_depth_video_codes()
                     inference_calls = int(getattr(self._state_owner(), "_last_model_inference_calls", 1) or 0)
                     self._session_states[session_id] = self._capture_policy_state()
-                actions_np = action_tensor.detach().cpu().numpy()
+                actions_np = _tensor_to_numpy(action_tensor)
                 response_payload = {
                     "style": self.default_style,
                     "action": actions_np[0].tolist() if actions_np.ndim >= 2 else actions_np.tolist(),
@@ -673,7 +686,7 @@ class MolmoAct2Server:
                 action_chunk = result.actions
                 if self.robot_processor is not None:
                     action_chunk = self.robot_processor.unnormalize_action(action_chunk, repo_id=tag)
-                actions_np = action_chunk.detach().cpu().numpy()
+                actions_np = _tensor_to_numpy(action_chunk)
                 response_payload["actions"] = actions_np[0].tolist()
                 response_payload["action_shape"] = list(actions_np.shape)
             if result.depth_bins is not None:
@@ -709,6 +722,12 @@ def main() -> None:
     parser.add_argument("--host", default="0.0.0.0", help="Bind host.")
     parser.add_argument("--port", type=int, default=8000, help="Bind port.")
     parser.add_argument("--device", default=None, help="Torch device override (e.g., cuda:0).")
+    parser.add_argument(
+        "--dtype",
+        choices=("bfloat16", "float16", "float32"),
+        default="bfloat16",
+        help="Parameter and floating-point inference dtype.",
+    )
     parser.add_argument("--seq_len", type=int, default=None, help="Override max sequence length.")
     parser.add_argument("--num_steps", type=int, default=None, help="Override flow-matching steps.")
     parser.add_argument(
@@ -794,6 +813,7 @@ def main() -> None:
         checkpoint=args.checkpoint,
         use_hf_ckpt=bool(args.hf_ckpt),
         device=args.device,
+        dtype=args.dtype,
         seq_len=args.seq_len,
         num_steps=args.num_steps,
         n_action_steps=args.n_action_steps,

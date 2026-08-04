@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import torch
+
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.types import FeatureType, PolicyFeature
 from lerobot.optim.optimizers import OptimizerConfig
@@ -25,6 +27,7 @@ class MolmoAct2Config(PreTrainedConfig):
     """
 
     checkpoint_path: str = "allenai/MolmoAct2"
+    dtype: str = "bfloat16"
     seq_len: Optional[int] = None
     num_steps: Optional[int] = None
     # Inference action mode:
@@ -49,6 +52,12 @@ class MolmoAct2Config(PreTrainedConfig):
     def __post_init__(self) -> None:
         super().__post_init__()
         self.inference_action_mode = str(self.inference_action_mode or "continuous").strip().lower()
+        self.dtype = str(self.dtype).strip().lower()
+        if self.dtype not in {"bfloat16", "float16", "float32"}:
+            raise ValueError(
+                f"Unsupported dtype={self.dtype!r}. "
+                "Expected one of {'bfloat16', 'float16', 'float32'}."
+            )
         if self.inference_action_mode not in {"continuous", "discrete"}:
             raise ValueError(
                 f"Unsupported inference_action_mode={self.inference_action_mode!r}. "
@@ -82,3 +91,11 @@ class MolmoAct2Config(PreTrainedConfig):
     @property
     def checkpoint_dir(self) -> Path:
         return Path(self.checkpoint_path)
+
+    @property
+    def torch_dtype(self) -> torch.dtype:
+        return {
+            "bfloat16": torch.bfloat16,
+            "float16": torch.float16,
+            "float32": torch.float32,
+        }[self.dtype]

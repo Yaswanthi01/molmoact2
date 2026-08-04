@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import importlib.util
 import json
 import logging
@@ -70,8 +71,35 @@ def _to_numpy(value: Any) -> np.ndarray:
     if isinstance(value, np.ndarray):
         return value
     if torch.is_tensor(value):
-        return value.detach().cpu().numpy()
+        value = value.detach().cpu()
+        if value.dtype == torch.bfloat16:
+            value = value.float()
+        return value.numpy()
     return np.asarray(value)
+
+
+def _move_to_device_and_dtype(
+    value: Any,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> Any:
+    if torch.is_tensor(value):
+        value = value.to(device)
+        if value.is_floating_point() and value.dtype != dtype:
+            value = value.to(dtype)
+        return value
+    if isinstance(value, dict):
+        return {
+            key: _move_to_device_and_dtype(item, device, dtype)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_move_to_device_and_dtype(item, device, dtype) for item in value]
+    if isinstance(value, tuple):
+        return tuple(
+            _move_to_device_and_dtype(item, device, dtype) for item in value
+        )
+    return value
 
 
 def _to_text(value: Any) -> str:
@@ -581,7 +609,6 @@ class MolmoAct2Policy(PreTrainedPolicy):
         _ensure_in_path(_resolve_molmoact2_root())
 
         from olmo.models.model_config import BaseModelConfig
-        from olmo.torch_util import move_to_device
         from olmo.train.checkpointer import load_model_state
         from olmo.util import prepare_cli_environment, resource_path
 
@@ -641,6 +668,8 @@ class MolmoAct2Policy(PreTrainedPolicy):
 
         with torch.device("meta"):
             model = model_cfg.build_model()
+        log.info("Materializing inference model on %s with dtype=%s", device, cfg.dtype)
+        model.to(dtype=cfg.torch_dtype)
         model.to_empty(device=device)
         load_model_state(checkpoint_dir, model)
         if _disable_inference_token_bias(model):
@@ -782,7 +811,10 @@ class MolmoAct2Policy(PreTrainedPolicy):
             depth_bin_to_token_id=depth_bin_to_token_id,
             discrete_action_processor=discrete_action_processor,
         )
-        self._move_to_device = move_to_device
+        self._move_to_device = functools.partial(
+            _move_to_device_and_dtype,
+            dtype=cfg.torch_dtype,
+        )
 
     @staticmethod
     def _build_discrete_action_processor(processor_name: str) -> Any:

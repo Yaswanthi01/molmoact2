@@ -21,7 +21,10 @@ def _to_numpy(value: Any) -> np.ndarray:
     if isinstance(value, np.ndarray):
         return value
     if torch.is_tensor(value):
-        return value.detach().cpu().numpy()
+        value = value.detach().cpu()
+        if value.dtype == torch.bfloat16:
+            value = value.float()
+        return value.numpy()
     return np.asarray(value)
 
 
@@ -216,7 +219,7 @@ class MolmoAct2HFBackend:
         model = AutoModelForImageTextToText.from_pretrained(
             checkpoint_source,
             trust_remote_code=True,
-            dtype=torch.float32,
+            dtype=self.config.torch_dtype,
             low_cpu_mem_usage=True,
         )
         self.model = model.to(device)
