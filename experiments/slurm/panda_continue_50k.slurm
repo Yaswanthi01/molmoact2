@@ -99,7 +99,7 @@ torchrun --standalone --nproc-per-node=1 \
 # Preserve exact evaluation milestones outside the rotating resume-checkpoint
 # set. Hard links avoid duplicating the large checkpoint files while ensuring
 # that cleanup of the original step directory does not remove the milestone.
-for milestone in 10000 15000 20000 25000 30000 35000 40000 45000 50000 55000 60000 65000 70000 75000; do
+for milestone in 40000 50000 60000 70000 75000; do
   source_checkpoint="$SAVE_FOLDER/step${milestone}"
   archived_checkpoint="$MILESTONE_FOLDER/step${milestone}"
   if [[ -d "$source_checkpoint" && ! -e "$archived_checkpoint" ]]; then
