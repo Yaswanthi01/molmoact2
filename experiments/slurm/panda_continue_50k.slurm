@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=molmoact2-panda-ee-50k
+#SBATCH --job-name=molmoact2-panda-ee-75k
 #SBATCH --account=ka
 #SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
 #SBATCH --gres=gpu:1
@@ -35,7 +35,7 @@ export WANDB_MODE="offline"
 BASELINE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-full-1epoch"
 SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-50k"
 MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-50k-milestones"
-TARGET_STEPS=50000
+TARGET_STEPS=75000
 SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_continue_50k.slurm"
 
 mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
@@ -78,7 +78,8 @@ torchrun --standalone --nproc-per-node=1 \
   allenai/MolmoAct2 \
   panda_drawer_ee \
   --frame_loading_backend=av \
-  --max_duration=50000 \
+  --max_duration=75000 \
+  --scheduler.t_max=50000 \
   --time_limit=1200 \
   --canceled_check_interval=1 \
   --log_interval=10 \
@@ -98,7 +99,7 @@ torchrun --standalone --nproc-per-node=1 \
 # Preserve exact evaluation milestones outside the rotating resume-checkpoint
 # set. Hard links avoid duplicating the large checkpoint files while ensuring
 # that cleanup of the original step directory does not remove the milestone.
-for milestone in 10000 15000 20000 25000 30000 35000 40000 45000 50000; do
+for milestone in 10000 15000 20000 25000 30000 35000 40000 45000 50000 55000 60000 65000 70000 75000; do
   source_checkpoint="$SAVE_FOLDER/step${milestone}"
   archived_checkpoint="$MILESTONE_FOLDER/step${milestone}"
   if [[ -d "$source_checkpoint" && ! -e "$archived_checkpoint" ]]; then
