@@ -321,9 +321,21 @@ class MolmoAct2Server:
             self.device = torch.device(self.policy.config.device or "cpu")
             self.inference_action_mode = str(self.policy.config.inference_action_mode)
             self.n_obs_steps = 1
-            self.checkpoint_n_action_steps = None
+            # max_action_horizon / flow_matching_num_steps are set directly on
+            # the HF checkpoint's own config by convert_molmoact2_to_hf.py --
+            # read them from there instead of hardcoding None, mirroring the
+            # native-checkpoint branch's fallback-to-checkpoint-config pattern
+            # below. Without this, clients that validate n_action_steps against
+            # checkpoint_n_action_steps (e.g. imikit's MolmoAct2Endpoint) can't
+            # talk to an --hf_ckpt server at all.
+            hf_model_config = getattr(hf_backend.model, "config", None)
+            self.checkpoint_n_action_steps = getattr(
+                hf_model_config, "max_action_horizon", None
+            )
             self.default_seq_len = self.policy.config.seq_len
-            self.default_num_steps = self.policy.config.num_steps
+            self.default_num_steps = self.policy.config.num_steps or getattr(
+                hf_model_config, "flow_matching_num_steps", None
+            )
             self.default_style = "robot_depth_action" if enable_depth_reasoning else "robot_action"
             self.default_norm_tag = str(norm_tag or self.policy.config.norm_tag or "")
             self.robot_processor = None
