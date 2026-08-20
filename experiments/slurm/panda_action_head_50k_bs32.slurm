@@ -91,7 +91,7 @@ torchrun --standalone --nproc-per-node=1 \
   --ft_action_expert=true \
   --ft_embedding=none
 
-for milestone in 40000 50000; do
+for milestone in 35000 50000; do
   source_checkpoint="$SAVE_FOLDER/step${milestone}"
   archived_checkpoint="$MILESTONE_FOLDER/step${milestone}"
   if [[ -d "$source_checkpoint" && ! -e "$archived_checkpoint" ]]; then

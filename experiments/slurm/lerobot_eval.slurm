@@ -13,7 +13,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
-  REPO_ROOT="${REPO_ROOT:-$SLURM_SUBMIT_DIR}"
+  SUBMIT_DIR="$(cd -- "$SLURM_SUBMIT_DIR" && pwd)"
+  if [[ "$(basename "$SUBMIT_DIR")" == "experiments" ]]; then
+    REPO_ROOT="${REPO_ROOT:-$(cd -- "$SUBMIT_DIR/.." && pwd)}"
+  else
+    REPO_ROOT="${REPO_ROOT:-$SUBMIT_DIR}"
+  fi
 else
   REPO_ROOT="${REPO_ROOT:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
 fi

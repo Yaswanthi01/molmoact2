@@ -30,25 +30,12 @@ export WANDB_PROJECT="molmoact2-panda-connector-action-50k-b32"
 export WANDB_ENTITY="local"
 export WANDB_MODE="offline"
 
-BASELINE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-full-1epoch"
-SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-connector-action-h30s30-bs32-50k"
-MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-connector-action-h30s30-bs32-50k-milestones"
+SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-connector-action-h30s30-bs32-scratch-50k"
+MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-connector-action-h30s30-bs32-scratch-50k-milestones"
 TARGET_STEPS=50000
 SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_connector_action_50k_bs32.slurm"
 
 mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
-
-if [[ ! -d "$SAVE_FOLDER/step8878" ]]; then
-  if [[ ! -d "$BASELINE_FOLDER/step8878" ]]; then
-    echo "Required baseline checkpoint not found: $BASELINE_FOLDER/step8878" >&2
-    exit 1
-  fi
-  echo "Seeding run from $BASELINE_FOLDER/step8878"
-  cp -al "$BASELINE_FOLDER/step8878" "$SAVE_FOLDER/step8878"
-  if [[ -f "$BASELINE_FOLDER/config.yaml" && ! -e "$SAVE_FOLDER/config.yaml" ]]; then
-    cp -a "$BASELINE_FOLDER/config.yaml" "$SAVE_FOLDER/config.yaml"
-  fi
-fi
 
 starting_step=0
 for checkpoint_dir in "$SAVE_FOLDER"/step*; do
@@ -59,14 +46,13 @@ for checkpoint_dir in "$SAVE_FOLDER"/step*; do
   fi
 done
 
-if (( starting_step < 8878 )); then
-  echo "No completed checkpoint at or beyond step8878 was found in $SAVE_FOLDER" >&2
-  exit 1
-fi
-
 echo "Training target: step${TARGET_STEPS}"
-echo "Starting/resuming from: step${starting_step}"
-echo "Resume/checkpoint folder: ${SAVE_FOLDER}"
+if (( starting_step == 0 )); then
+  echo "Starting fresh from base checkpoint: allenai/MolmoAct2"
+else
+  echo "Resuming from: step${starting_step}"
+fi
+echo "Checkpoint folder: ${SAVE_FOLDER}"
 
 torchrun --standalone --nproc-per-node=1 \
   launch_scripts/train_lerobot.py \
@@ -94,7 +80,7 @@ torchrun --standalone --nproc-per-node=1 \
   --action_expert_learning_rate=5e-5 \
   --ft_connector=true
 
-for milestone in 40000 50000; do
+for milestone in 35000 50000; do
   source_checkpoint="$SAVE_FOLDER/step${milestone}"
   archived_checkpoint="$MILESTONE_FOLDER/step${milestone}"
   if [[ -d "$source_checkpoint" && ! -e "$archived_checkpoint" ]]; then
