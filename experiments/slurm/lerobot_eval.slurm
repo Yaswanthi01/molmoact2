@@ -11,8 +11,16 @@
 
 set -euo pipefail
 
-cd "$HOME/molmoact2/experiments"
-source "$HOME/molmoact2/.venv_molmoact312/bin/activate"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+  REPO_ROOT="${REPO_ROOT:-$SLURM_SUBMIT_DIR}"
+else
+  REPO_ROOT="${REPO_ROOT:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+fi
+EXPERIMENTS_ROOT="$REPO_ROOT/experiments"
+VENV_PATH="${VENV_PATH:-$REPO_ROOT/.venv_molmoact312}"
+cd "$EXPERIMENTS_ROOT"
+source "$VENV_PATH/bin/activate"
 
 echo "Host: $(hostname)"
 echo "Job: ${SLURM_JOB_ID:-local}"
@@ -22,13 +30,13 @@ python --version
 nvidia-smi
 python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE')"
 
-export LEROBOT_DATA_ROOT="${LEROBOT_DATA_ROOT:-$HOME/molmoact2/datasets}"
-export MOLMO_DATA_DIR="${MOLMO_DATA_DIR:-$HOME/molmoact2/datasets}"
+export LEROBOT_DATA_ROOT="${LEROBOT_DATA_ROOT:-$REPO_ROOT/datasets}"
+export MOLMO_DATA_DIR="${MOLMO_DATA_DIR:-$REPO_ROOT/datasets}"
 export LEROBOT_VIDEO_BACKEND="${LEROBOT_VIDEO_BACKEND:-pyav}"
-export HF_HOME="${HF_HOME:-$HOME/molmoact2/.cache/huggingface}"
+export HF_HOME="${HF_HOME:-$REPO_ROOT/.cache/huggingface}"
 export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
 
-CONFIG_FILE="${CONFIG_FILE:-$HOME/molmoact2/experiments/slurm/lerobot_eval_config.env}"
+CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/lerobot_eval_config.env}"
 if [[ -f "$CONFIG_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$CONFIG_FILE"
@@ -56,6 +64,13 @@ fi
 VIDEO_BACKEND="${VIDEO_BACKEND:-pyav}"
 DEVICE="${DEVICE:-cuda}"
 SEED="${SEED:-6198}"
+N_ACTION_STEPS="${N_ACTION_STEPS:-30}"
+NUM_STEPS="${NUM_STEPS:-}"
+SEQ_LEN="${SEQ_LEN:-}"
+INFERENCE_ACTION_MODE="${INFERENCE_ACTION_MODE:-continuous}"
+HF_CKPT="${HF_CKPT:-false}"
+ENABLE_DEPTH_REASONING="${ENABLE_DEPTH_REASONING:-false}"
+ENABLE_INFERENCE_CUDA_GRAPH="${ENABLE_INFERENCE_CUDA_GRAPH:-true}"
 EPISODE_IDX="${EPISODE_IDX:-${SLURM_ARRAY_TASK_ID:-0}}"
 EPISODE_FRAMES="${EPISODE_FRAMES:-}"
 VERBOSE="${VERBOSE:-false}"
@@ -108,6 +123,13 @@ echo "NORM_TAG=$NORM_TAG"
 echo "VIDEO_BACKEND=$VIDEO_BACKEND"
 echo "DEVICE=$DEVICE"
 echo "SEED=$SEED"
+echo "N_ACTION_STEPS=$N_ACTION_STEPS"
+echo "NUM_STEPS=$NUM_STEPS"
+echo "SEQ_LEN=$SEQ_LEN"
+echo "INFERENCE_ACTION_MODE=$INFERENCE_ACTION_MODE"
+echo "HF_CKPT=$HF_CKPT"
+echo "ENABLE_DEPTH_REASONING=$ENABLE_DEPTH_REASONING"
+echo "ENABLE_INFERENCE_CUDA_GRAPH=$ENABLE_INFERENCE_CUDA_GRAPH"
 echo "EPISODE_FRAMES=$EPISODE_FRAMES"
 echo "EXPECTED_EPISODES=$expected_episode_count"
 echo "DRY_RUN=$DRY_RUN"
@@ -129,7 +151,32 @@ for episode_idx in "${episode_ids[@]}"; do
     --video_backend "$VIDEO_BACKEND"
     --device "$DEVICE"
     --seed "$SEED"
+    --inference_action_mode "$INFERENCE_ACTION_MODE"
   )
+
+  if [[ -n "$N_ACTION_STEPS" ]]; then
+    default_args+=(--n_action_steps "$N_ACTION_STEPS")
+  fi
+
+  if [[ -n "$NUM_STEPS" ]]; then
+    default_args+=(--num_steps "$NUM_STEPS")
+  fi
+
+  if [[ -n "$SEQ_LEN" ]]; then
+    default_args+=(--seq_len "$SEQ_LEN")
+  fi
+
+  if [[ "$HF_CKPT" == "true" || "$HF_CKPT" == "1" ]]; then
+    default_args+=(--hf_ckpt true)
+  fi
+
+  if [[ "$ENABLE_DEPTH_REASONING" == "true" || "$ENABLE_DEPTH_REASONING" == "1" ]]; then
+    default_args+=(--enable_depth_reasoning)
+  fi
+
+  if [[ "$ENABLE_INFERENCE_CUDA_GRAPH" == "false" || "$ENABLE_INFERENCE_CUDA_GRAPH" == "0" ]]; then
+    default_args+=(--disable_inference_cuda_graph)
+  fi
 
   if [[ "$VERBOSE" == "true" || "$VERBOSE" == "1" ]]; then
     default_args+=(--verbose)

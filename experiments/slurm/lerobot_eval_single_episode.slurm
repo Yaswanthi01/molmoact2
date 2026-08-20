@@ -46,6 +46,13 @@ fi
 VIDEO_BACKEND="${VIDEO_BACKEND:-pyav}"
 DEVICE="${DEVICE:-cuda}"
 SEED="${SEED:-6198}"
+N_ACTION_STEPS="${N_ACTION_STEPS:-30}"
+NUM_STEPS="${NUM_STEPS:-}"
+SEQ_LEN="${SEQ_LEN:-}"
+INFERENCE_ACTION_MODE="${INFERENCE_ACTION_MODE:-continuous}"
+HF_CKPT="${HF_CKPT:-false}"
+ENABLE_DEPTH_REASONING="${ENABLE_DEPTH_REASONING:-false}"
+ENABLE_INFERENCE_CUDA_GRAPH="${ENABLE_INFERENCE_CUDA_GRAPH:-true}"
 EPISODE_FRAMES="${EPISODE_FRAMES:-}"
 VERBOSE="${VERBOSE:-false}"
 
@@ -74,8 +81,27 @@ args=(
   --video_backend "$VIDEO_BACKEND"
   --device "$DEVICE"
   --seed "$SEED"
+  --inference_action_mode "$INFERENCE_ACTION_MODE"
 )
 
+if [[ -n "$N_ACTION_STEPS" ]]; then
+  args+=(--n_action_steps "$N_ACTION_STEPS")
+fi
+if [[ -n "$NUM_STEPS" ]]; then
+  args+=(--num_steps "$NUM_STEPS")
+fi
+if [[ -n "$SEQ_LEN" ]]; then
+  args+=(--seq_len "$SEQ_LEN")
+fi
+if [[ "$HF_CKPT" == "true" || "$HF_CKPT" == "1" ]]; then
+  args+=(--hf_ckpt true)
+fi
+if [[ "$ENABLE_DEPTH_REASONING" == "true" || "$ENABLE_DEPTH_REASONING" == "1" ]]; then
+  args+=(--enable_depth_reasoning)
+fi
+if [[ "$ENABLE_INFERENCE_CUDA_GRAPH" == "false" || "$ENABLE_INFERENCE_CUDA_GRAPH" == "0" ]]; then
+  args+=(--disable_inference_cuda_graph)
+fi
 if [[ "$VERBOSE" == "true" || "$VERBOSE" == "1" ]]; then
   args+=(--verbose)
 fi
