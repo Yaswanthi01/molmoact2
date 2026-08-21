@@ -409,6 +409,48 @@ def build_molmoact2_panda_drawer_ee() -> Tuple[List[RawMixtureEntry], Dict[str, 
     )
 
 
+def build_molmoact2_panda_drawer_ee_state_absolute() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    return build_single_lerobot_mixture(
+        name="panda_drawer_ee_state_absolute",
+        tag="panda_drawer_ee_state_absolute",
+        repo_ids=["panda_drawer_ee_state_absolute_molmoact2_v3"],
+        action_key="action",
+        state_keys=["observation.state"],
+        camera_keys=[
+            "observation.images.gripper_cam.rgb",
+            "observation.images.left_cam.left",
+            "observation.images.right_cam.left",
+        ],
+        normalize_gripper=False,
+        setup_type="single franka panda robot arm opening a drawer",
+        control_mode="absolute end-effector pose with current EE pose in state",
+        action_horizon=30,
+        action_dim=8,
+        n_action_steps=30,
+    )
+
+
+def build_molmoact2_panda_drawer_ee_state_relative() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    return build_single_lerobot_mixture(
+        name="panda_drawer_ee_state_relative",
+        tag="panda_drawer_ee_state_relative",
+        repo_ids=["panda_drawer_ee_state_relative_molmoact2_v3"],
+        action_key="action",
+        state_keys=["observation.state"],
+        camera_keys=[
+            "observation.images.gripper_cam.rgb",
+            "observation.images.left_cam.left",
+            "observation.images.right_cam.left",
+        ],
+        normalize_gripper=False,
+        setup_type="single franka panda robot arm opening a drawer",
+        control_mode="relative end-effector pose with current EE pose in state",
+        action_horizon=30,
+        action_dim=8,
+        n_action_steps=30,
+    )
+
+
 MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "pre_post_train": build_molmoact2_pre_post_train,
     "droid": build_molmoact2_droid,
@@ -417,4 +459,6 @@ MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "yam": build_molmoact2_yam,
     "so100_so101": build_molmoact2_so100_so101,
     "panda_drawer_ee": build_molmoact2_panda_drawer_ee,
+    "panda_drawer_ee_state_absolute": build_molmoact2_panda_drawer_ee_state_absolute,
+    "panda_drawer_ee_state_relative": build_molmoact2_panda_drawer_ee_state_relative,
 }
