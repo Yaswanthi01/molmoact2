@@ -34,7 +34,7 @@ DATASET_ROOT="$HOME/molmoact2/datasets/panda_drawer_ee_state_relative_molmoact2_
 SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-state-relative-action-h30s30-bs32-50k"
 MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-state-relative-action-h30s30-bs32-50k-milestones"
 TARGET_STEPS=50000
-SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_ee_state_relative_action_50k_bs16.slurm"
+SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_ee_state_relative_action_50k_bs32.slurm"
 
 mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
 
