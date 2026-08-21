@@ -41,6 +41,11 @@ def _normalize_feature_stats(stats: Dict[str, object]) -> Dict[str, object]:
     for key, value in stats.items():
         if key == "count":
             normalized[key] = _coerce_count(value)
+        elif key == "names":
+            if isinstance(value, (list, tuple, np.ndarray)):
+                normalized[key] = [str(item) for item in value]
+            else:
+                normalized[key] = value
         else:
             normalized[key] = np.asarray(value, dtype=np.float64)
     return normalized
