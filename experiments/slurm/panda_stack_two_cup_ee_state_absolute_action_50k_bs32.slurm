@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=molmoact2-panda-ee-state-rel-20k-b32
+#SBATCH --job-name=molmoact2-panda-stack-abs-20k-b32
 #SBATCH --account=ka
 #SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
 #SBATCH --gres=gpu:1
@@ -26,22 +26,22 @@ export MOLMO_DATA_DIR="$HOME/molmoact2/datasets"
 export LEROBOT_VIDEO_BACKEND=pyav
 export HF_HOME="$HOME/molmoact2/.cache/huggingface"
 export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
-export WANDB_PROJECT="molmoact2-panda-ee-state-relative-action-20k-b32"
+export WANDB_PROJECT="molmoact2-panda-stack-two-cup-ee-state-absolute-action-20k-b32"
 export WANDB_ENTITY="local"
 export WANDB_MODE="offline"
 
-DATASET_ROOT="$HOME/molmoact2/datasets/panda_drawer_ee_state_relative_molmoact2_v3"
-SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-state-relative-action-h30s30-bs32-20k"
-MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-state-relative-action-h30s30-bs32-20k-milestones"
+DATASET_ROOT="$HOME/molmoact2/datasets/panda_stack_two_cup_ee_state_absolute_molmoact2_v3"
+SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-stack-two-cup-ee-state-absolute-action-h30s30-bs32-20k"
+MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-stack-two-cup-ee-state-absolute-action-h30s30-bs32-20k-milestones"
 TARGET_STEPS=20000
-SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_ee_state_relative_action_50k_bs32.slurm"
+SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_stack_two_cup_ee_state_absolute_action_50k_bs32.slurm"
 
 mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
 
 if [[ ! -d "$DATASET_ROOT" ]]; then
   echo "Required dataset not found: $DATASET_ROOT" >&2
   echo "Create it first with:" >&2
-  echo "  python experiments/scripts/prepare_panda_drawer_ee_state_dataset.py --variant relative --symlink-videos" >&2
+  echo "  python experiments/scripts/prepare_panda_drawer_ee_state_dataset.py --source datasets/panda_stack_two_cup_ee_fullres_v3.0 --variant absolute --output datasets/panda_stack_two_cup_ee_state_absolute_molmoact2_v3 --symlink-videos" >&2
   exit 1
 fi
 
@@ -65,7 +65,7 @@ echo "Checkpoint folder: ${SAVE_FOLDER}"
 torchrun --standalone --nproc-per-node=1 \
   launch_scripts/train_lerobot.py \
   allenai/MolmoAct2 \
-  panda_drawer_ee_state_relative \
+  panda_stack_two_cup_ee_state_absolute \
   --frame_loading_backend=av \
   --max_duration=20000 \
   --scheduler.t_max=20000 \
