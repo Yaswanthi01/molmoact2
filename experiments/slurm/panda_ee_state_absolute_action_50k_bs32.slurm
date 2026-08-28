@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=molmoact2-panda-ee-state-abs-50k-b32
+#SBATCH --job-name=molmoact2-panda-ee-state-abs-60k-b32
 #SBATCH --account=ka
 #SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
 #SBATCH --gres=gpu:1
@@ -33,7 +33,7 @@ export WANDB_MODE="offline"
 DATASET_ROOT="$HOME/molmoact2/datasets/panda_drawer_ee_state_absolute_molmoact2_v3"
 SAVE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-state-absolute-action-h30s30-bs32-50k"
 MILESTONE_FOLDER="$HOME/molmoact2/checkpoints/panda-ee-state-absolute-action-h30s30-bs32-50k-milestones"
-TARGET_STEPS=50000
+TARGET_STEPS=60000
 SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_ee_state_absolute_action_50k_bs32.slurm"
 
 mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
@@ -67,8 +67,8 @@ torchrun --standalone --nproc-per-node=1 \
   allenai/MolmoAct2 \
   panda_drawer_ee_state_absolute \
   --frame_loading_backend=av \
-  --max_duration=50000 \
-  --scheduler.t_max=50000 \
+  --max_duration=60000 \
+  --scheduler.t_max=60000 \
   --time_limit=1200 \
   --canceled_check_interval=1 \
   --log_interval=10 \
@@ -77,15 +77,15 @@ torchrun --standalone --nproc-per-node=1 \
   --num_workers=0 \
   --pin_memory=false \
   --save_folder="$SAVE_FOLDER" \
-  --save_interval=10000 \
-  --save_num_checkpoints_to_keep=3 \
+  --save_interval=20000 \
+  --save_num_checkpoints_to_keep=2 \
   --packing=false \
   --dynamic_seq_len=true \
   --ft_vlm=false \
   --ft_action_expert=true \
   --ft_embedding=none
 
-for milestone in 10000 20000 30000 40000 50000; do
+for milestone in 40000 60000; do
   source_checkpoint="$SAVE_FOLDER/step${milestone}"
   archived_checkpoint="$MILESTONE_FOLDER/step${milestone}"
   if [[ -d "$source_checkpoint" && ! -e "$archived_checkpoint" ]]; then
