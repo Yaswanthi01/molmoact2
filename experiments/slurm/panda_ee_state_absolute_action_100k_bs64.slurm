@@ -6,10 +6,16 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
 #SBATCH --time=00:28:00
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
 
 set -euo pipefail
+
+CHAIN_ROOT_JOB_ID="${CHAIN_ROOT_JOB_ID:-$SLURM_JOB_ID}"
+CHAIN_LOG_DIR="$HOME/molmoact2/logs/$CHAIN_ROOT_JOB_ID"
+mkdir -p "$CHAIN_LOG_DIR"
+exec > >(tee -a "$CHAIN_LOG_DIR/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out") \
+  2> >(tee -a "$CHAIN_LOG_DIR/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.err" >&2)
 
 cd "$HOME/molmoact2/experiments"
 source "$HOME/molmoact2/.venv_molmoact312/bin/activate"
@@ -97,6 +103,8 @@ torchrun --standalone --nproc-per-node=1 \
   --global_batch_size=64 \
   --num_workers=4 \
   --pin_memory=true \
+  --run_name=panda-drawer-absolute-bs64-from-bs32-step60k-to100k \
+  --model.action_expert.mlp_ratio=4.0 \
   --save_folder="$SAVE_FOLDER" \
   --load_path="$SOURCE_CHECKPOINT" \
   --reset_optimizer_state=false \
@@ -131,7 +139,10 @@ echo "Latest completed checkpoint: step${latest_step}"
 
 if (( latest_step < TARGET_STEPS )); then
   echo "Target is step${TARGET_STEPS}; submitting the next segment."
-  next_job_output="$(sbatch --dependency="afterok:${SLURM_JOB_ID}" "$SLURM_SCRIPT")"
+  next_job_output="$(sbatch \
+    --dependency="afterok:${SLURM_JOB_ID}" \
+    --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID}" \
+    "$SLURM_SCRIPT")"
   echo "$next_job_output"
 else
   echo "Training target reached at step${latest_step}."
