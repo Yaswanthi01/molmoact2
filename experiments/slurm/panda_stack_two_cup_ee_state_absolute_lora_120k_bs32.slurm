@@ -37,6 +37,7 @@ export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
 export WANDB_PROJECT="molmoact2"
 export WANDB_ENTITY="yaswanthi2001-karlsruhe-institute-of-technology"
 export WANDB_MODE="online"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 MOLMO_WORKSPACE="${MOLMO_WORKSPACE:?Set MOLMO_WORKSPACE to your allocated workspace path before sbatch}"
 if [[ "$MOLMO_WORKSPACE" != /* || ! -d "$MOLMO_WORKSPACE" || ! -w "$MOLMO_WORKSPACE" ]]; then
