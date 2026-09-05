@@ -127,6 +127,36 @@ for milestone in 10000 20000 30000 40000 50000 60000 70000 80000 90000 100000 11
   done
 done
 
+# The trainer records LoRA sidecars after writing the sharded trainer state, so
+# chained restarts can forget older sidecars and fail to prune them. Keep
+# sidecars only for the latest two resumable sharded checkpoints.
+latest_live_step=0
+previous_live_step=0
+for checkpoint_dir in "$SAVE_FOLDER"/step*; do
+  [[ -d "$checkpoint_dir" ]] || continue
+  step_name="${checkpoint_dir##*/step}"
+  [[ "$step_name" =~ ^[0-9]+$ ]] || continue
+  if (( step_name > latest_live_step )); then
+    previous_live_step="$latest_live_step"
+    latest_live_step="$step_name"
+  elif (( step_name > previous_live_step )); then
+    previous_live_step="$step_name"
+  fi
+done
+
+for suffix in "-lora-llm" "-lora-vision" "-merged"; do
+  for sidecar_dir in "$SAVE_FOLDER"/step*"$suffix"; do
+    [[ -d "$sidecar_dir" ]] || continue
+    sidecar_name="${sidecar_dir##*/step}"
+    sidecar_step="${sidecar_name%$suffix}"
+    [[ "$sidecar_step" =~ ^[0-9]+$ ]] || continue
+    if (( sidecar_step != latest_live_step && sidecar_step != previous_live_step )); then
+      echo "Removing stale live LoRA sidecar: ${sidecar_dir##*/}"
+      rm -rf -- "$sidecar_dir"
+    fi
+  done
+done
+
 latest_step=0
 for checkpoint_dir in "$SAVE_FOLDER"/step*; do
   [[ -d "$checkpoint_dir" ]] || continue
