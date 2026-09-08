@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=00:28:00
+#SBATCH --time=00:30:00
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
@@ -39,7 +39,7 @@ export WANDB_ENTITY="yaswanthi2001-karlsruhe-institute-of-technology"
 export WANDB_MODE="online"
 export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
-MOLMO_WORKSPACE="${MOLMO_WORKSPACE:?Set MOLMO_WORKSPACE to your allocated workspace path before sbatch}"
+MOLMO_WORKSPACE="${MOLMO_WORKSPACE:-$(ws_find molmoact2-checkpoints)}"
 if [[ "$MOLMO_WORKSPACE" != /* || ! -d "$MOLMO_WORKSPACE" || ! -w "$MOLMO_WORKSPACE" ]]; then
   echo "MOLMO_WORKSPACE must be an absolute, existing, writable directory: $MOLMO_WORKSPACE" >&2
   exit 1
@@ -169,11 +169,23 @@ echo "Latest completed checkpoint: step${latest_step}"
 
 if (( latest_step < TARGET_STEPS )); then
   echo "Target is step${TARGET_STEPS}; submitting the next segment."
-  next_job_output="$(sbatch \
-    --dependency="afterok:${SLURM_JOB_ID}" \
-    --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID}" \
-    "$SLURM_SCRIPT")"
-  echo "$next_job_output"
+  submitted=0
+  for attempt in {1..10}; do
+    if next_job_output="$(sbatch \
+      --dependency="afterok:${SLURM_JOB_ID}" \
+      --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID},MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
+      "$SLURM_SCRIPT" 2>&1)"; then
+      echo "$next_job_output"
+      submitted=1
+      break
+    fi
+    echo "Submission attempt ${attempt} failed: ${next_job_output}" >&2
+    sleep 30
+  done
+  if (( submitted == 0 )); then
+    echo "Could not submit the next segment after 10 attempts." >&2
+    exit 1
+  fi
 else
   echo "Training target reached at step${latest_step}."
 fi

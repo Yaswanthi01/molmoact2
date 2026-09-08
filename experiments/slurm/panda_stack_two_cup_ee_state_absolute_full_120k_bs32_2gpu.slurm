@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=00:28:00
+#SBATCH --time=00:30:00
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
@@ -27,7 +27,7 @@ echo "Job ID: ${SLURM_JOB_ID}"
 echo "Python: $(which python)"
 python --version
 nvidia-smi
-python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE')"
+python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('Visible GPU count:', torch.cuda.device_count()); [print(f'GPU {i}: {torch.cuda.get_device_name(i)}') for i in range(torch.cuda.device_count())]"
 
 export LEROBOT_DATA_ROOT="$HOME/molmoact2/datasets"
 export MOLMO_DATA_DIR="$HOME/molmoact2/datasets"
@@ -135,11 +135,23 @@ echo "Latest completed checkpoint: step${latest_step}"
 
 if (( latest_step < TARGET_STEPS )); then
   echo "Target is step${TARGET_STEPS}; submitting the next segment."
-  next_job_output="$(sbatch \
-    --dependency="afterok:${SLURM_JOB_ID}" \
-    --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID}" \
-    "$SLURM_SCRIPT")"
-  echo "$next_job_output"
+  submitted=0
+  for attempt in {1..10}; do
+    if next_job_output="$(sbatch \
+      --dependency="afterok:${SLURM_JOB_ID}" \
+      --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID},MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
+      "$SLURM_SCRIPT" 2>&1)"; then
+      echo "$next_job_output"
+      submitted=1
+      break
+    fi
+    echo "Submission attempt ${attempt} failed: ${next_job_output}" >&2
+    sleep 30
+  done
+  if (( submitted == 0 )); then
+    echo "Could not submit the next segment after 10 attempts." >&2
+    exit 1
+  fi
 else
   echo "Training target reached at step${latest_step}."
 fi
