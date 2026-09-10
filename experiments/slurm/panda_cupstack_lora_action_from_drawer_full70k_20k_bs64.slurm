@@ -1,0 +1,219 @@
+#!/bin/bash
+#SBATCH --job-name=molmoact2-cup-lora-from-drawer70k-20k-b64
+#SBATCH --account=ka
+#SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=120G
+#SBATCH --time=00:30:00
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
+
+set -euo pipefail
+
+RUN_NAME="panda-cupstack-lora-action-from-drawer-full-step70k-20k-bs64"
+RUN_GROUP="panda-cupstack-from-drawer-full"
+CHAIN_ROOT_JOB_ID="${CHAIN_ROOT_JOB_ID:-$SLURM_JOB_ID}"
+CHAIN_LOG_DIR="$HOME/molmoact2/logs/training/$RUN_GROUP/$RUN_NAME/chain-$CHAIN_ROOT_JOB_ID"
+mkdir -p "$CHAIN_LOG_DIR"
+exec > >(tee -a "$CHAIN_LOG_DIR/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out") \
+  2> >(tee -a "$CHAIN_LOG_DIR/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.err" >&2)
+
+cd "$HOME/molmoact2/experiments"
+source "$HOME/molmoact2/.venv_molmoact312/bin/activate"
+
+echo "Host: $(hostname)"
+echo "Job ID: ${SLURM_JOB_ID}"
+echo "Python: $(which python)"
+python --version
+nvidia-smi
+python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE')"
+
+export LEROBOT_DATA_ROOT="$HOME/molmoact2/datasets"
+export MOLMO_DATA_DIR="$HOME/molmoact2/datasets"
+export LEROBOT_VIDEO_BACKEND=pyav
+export HF_HOME="$HOME/molmoact2/.cache/huggingface"
+export HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}"
+export WANDB_PROJECT="molmoact2"
+export WANDB_ENTITY="yaswanthi2001-karlsruhe-institute-of-technology"
+export WANDB_MODE="online"
+export PYTORCH_ALLOC_CONF="expandable_segments:True"
+
+MOLMO_WORKSPACE="${MOLMO_WORKSPACE:-$(ws_find molmoact2-checkpoints)}"
+if [[ "$MOLMO_WORKSPACE" != /* || ! -d "$MOLMO_WORKSPACE" || ! -w "$MOLMO_WORKSPACE" ]]; then
+  echo "MOLMO_WORKSPACE must be an absolute, existing, writable directory: $MOLMO_WORKSPACE" >&2
+  exit 1
+fi
+
+DATASET_ROOT="$HOME/molmoact2/datasets/panda_stack_two_cup_ee_state_absolute_molmoact2_v3"
+CHECKPOINT_ROOT="$MOLMO_WORKSPACE/checkpoints"
+SOURCE_RUN_FOLDER="$CHECKPOINT_ROOT/panda-drawer-ee-state-absolute-full-h30s30-bs32-120k"
+SOURCE_MILESTONE_FOLDER="$CHECKPOINT_ROOT/panda-drawer-ee-state-absolute-full-h30s30-bs32-120k-milestones"
+SOURCE_CHECKPOINT="$SOURCE_RUN_FOLDER/step70000"
+if [[ ! -d "$SOURCE_CHECKPOINT" ]]; then
+  SOURCE_CHECKPOINT="$SOURCE_MILESTONE_FOLDER/step70000"
+fi
+SAVE_FOLDER="$CHECKPOINT_ROOT/panda-cupstack-lora-action-from-drawer-full70k-h30s30-bs64-20k"
+MILESTONE_FOLDER="$CHECKPOINT_ROOT/panda-cupstack-lora-action-from-drawer-full70k-h30s30-bs64-20k-milestones"
+TARGET_STEPS=20000
+SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_cupstack_lora_action_from_drawer_full70k_20k_bs64.slurm"
+
+mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
+
+if [[ ! -d "$DATASET_ROOT" ]]; then
+  echo "Required dataset not found: $DATASET_ROOT" >&2
+  echo "Create it first with:" >&2
+  echo "  python scripts/prepare_panda_drawer_ee_state_dataset.py --source ../datasets/panda_stack_two_cup_ee_fullres_v3.0 --variant absolute --output ../datasets/panda_stack_two_cup_ee_state_absolute_molmoact2_v3 --symlink-videos" >&2
+  exit 1
+fi
+
+if [[ ! -d "$SOURCE_CHECKPOINT" ]]; then
+  echo "Drawer full-finetuned source checkpoint step70000 was not found." >&2
+  echo "Checked $SOURCE_RUN_FOLDER/step70000" >&2
+  echo "Checked $SOURCE_MILESTONE_FOLDER/step70000" >&2
+  exit 1
+fi
+
+starting_step=0
+for checkpoint_dir in "$SAVE_FOLDER"/step*; do
+  [[ -d "$checkpoint_dir" ]] || continue
+  step_name="${checkpoint_dir##*/step}"
+  if [[ "$step_name" =~ ^[0-9]+$ ]] && (( step_name > starting_step )); then
+    starting_step="$step_name"
+  fi
+done
+
+echo "Training mixture: panda_stack_two_cup_ee_state_absolute"
+echo "Training mode: Cupstack-only LoRA VLM with fully trainable action expert"
+echo "Initialization: Drawer full-finetuned step70000"
+echo "Action representation: absolute end-effector pose"
+echo "Training target: step${TARGET_STEPS}"
+echo "Batch layout: 4 GPUs, global batch 64, device microbatch 4 per GPU, gradient accumulation 4"
+if (( starting_step == 0 )); then
+  MODEL_CHECKPOINT="$SOURCE_CHECKPOINT"
+  LOAD_ARGS=(
+    --load_path="$SOURCE_CHECKPOINT"
+    --reset_optimizer_state=true
+    --reset_trainer_state=true
+  )
+  echo "Branching from: $SOURCE_CHECKPOINT"
+else
+  MODEL_CHECKPOINT="$SAVE_FOLDER/step${starting_step}"
+  LOAD_ARGS=(
+    --load_path="$MODEL_CHECKPOINT"
+    --reset_optimizer_state=false
+    --reset_trainer_state=false
+  )
+  echo "Resuming from: step${starting_step}"
+fi
+echo "Checkpoint folder: ${SAVE_FOLDER}"
+
+torchrun --standalone --nproc-per-node=4 \
+  launch_scripts/train_lerobot.py \
+  "$MODEL_CHECKPOINT" \
+  panda_stack_two_cup_ee_state_absolute \
+  --frame_loading_backend=av \
+  --max_duration=20000 \
+  --scheduler.t_max=20000 \
+  --time_limit=1200 \
+  --canceled_check_interval=1 \
+  --log_interval=10 \
+  --device_batch_size=4 \
+  --global_batch_size=64 \
+  --num_workers=4 \
+  --pin_memory=true \
+  --data.timeout=900 \
+  --run_name="$RUN_NAME" \
+  --wandb.group="$RUN_GROUP" \
+  --save_folder="$SAVE_FOLDER" \
+  --save_interval=5000 \
+  --save_num_checkpoints_to_keep=2 \
+  --packing=false \
+  --dynamic_seq_len=true \
+  --ft_vlm=true \
+  --ft_action_expert=true \
+  --ft_embedding=lm_head \
+  --lora_enable=true \
+  --lora_rank=64 \
+  --lora_alpha=16 \
+  --lora_dropout=0.05 \
+  --connector_learning_rate=5e-5 \
+  --vit_learning_rate=5e-5 \
+  --llm_learning_rate=5e-5 \
+  --action_expert_learning_rate=5e-5 \
+  "${LOAD_ARGS[@]}"
+
+for milestone in 5000 10000 15000 20000; do
+  for suffix in "" "-lora-llm" "-lora-vision" "-merged"; do
+    source_checkpoint="$SAVE_FOLDER/step${milestone}${suffix}"
+    archived_checkpoint="$MILESTONE_FOLDER/step${milestone}${suffix}"
+    if [[ -d "$source_checkpoint" && ! -e "$archived_checkpoint" ]]; then
+      echo "Preserving evaluation milestone step${milestone}${suffix}"
+      cp -al "$source_checkpoint" "$archived_checkpoint"
+    fi
+  done
+done
+
+# The trainer records LoRA sidecars after writing the sharded trainer state, so
+# chained restarts can forget older sidecars and fail to prune them. Keep
+# sidecars only for the latest two resumable sharded checkpoints.
+latest_live_step=0
+previous_live_step=0
+for checkpoint_dir in "$SAVE_FOLDER"/step*; do
+  [[ -d "$checkpoint_dir" ]] || continue
+  step_name="${checkpoint_dir##*/step}"
+  [[ "$step_name" =~ ^[0-9]+$ ]] || continue
+  if (( step_name > latest_live_step )); then
+    previous_live_step="$latest_live_step"
+    latest_live_step="$step_name"
+  elif (( step_name > previous_live_step )); then
+    previous_live_step="$step_name"
+  fi
+done
+
+for suffix in "-lora-llm" "-lora-vision" "-merged"; do
+  for sidecar_dir in "$SAVE_FOLDER"/step*"$suffix"; do
+    [[ -d "$sidecar_dir" ]] || continue
+    sidecar_name="${sidecar_dir##*/step}"
+    sidecar_step="${sidecar_name%$suffix}"
+    [[ "$sidecar_step" =~ ^[0-9]+$ ]] || continue
+    if (( sidecar_step != latest_live_step && sidecar_step != previous_live_step )); then
+      echo "Removing stale live LoRA sidecar: ${sidecar_dir##*/}"
+      rm -rf -- "$sidecar_dir"
+    fi
+  done
+done
+
+latest_step=0
+for checkpoint_dir in "$SAVE_FOLDER"/step*; do
+  [[ -d "$checkpoint_dir" ]] || continue
+  step_name="${checkpoint_dir##*/step}"
+  if [[ "$step_name" =~ ^[0-9]+$ ]] && (( step_name > latest_step )); then
+    latest_step="$step_name"
+  fi
+done
+
+echo "Latest completed checkpoint: step${latest_step}"
+
+if (( latest_step < TARGET_STEPS )); then
+  echo "Target is step${TARGET_STEPS}; submitting the next segment."
+  submitted=0
+  for attempt in {1..10}; do
+    if next_job_output="$(sbatch \
+      --dependency="afterok:${SLURM_JOB_ID}" \
+      --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID},MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
+      "$SLURM_SCRIPT" 2>&1)"; then
+      echo "$next_job_output"
+      submitted=1
+      break
+    fi
+    echo "Submission attempt ${attempt} failed: ${next_job_output}" >&2
+    sleep 30
+  done
+  if (( submitted == 0 )); then
+    echo "Could not submit the next segment after 10 attempts." >&2
+    exit 1
+  fi
+else
+  echo "Training target reached at step${latest_step}."
+fi
