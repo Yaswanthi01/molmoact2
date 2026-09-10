@@ -496,6 +496,32 @@ def build_molmoact2_panda_multitask_absolute() -> Tuple[List[RawMixtureEntry], D
     )
 
 
+def build_molmoact2_panda_sort_three_absolute_all() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    return build_single_lerobot_mixture(
+        name="panda_sort_three_absolute_all",
+        tag="panda_sort_three_ee_state_absolute",
+        repo_ids=[
+            "panda_sort_three_no_yellow_ee_state_absolute_molmoact2_v3",
+            "panda_sort_three_no_red_ee_state_absolute_molmoact2_v3",
+            "panda_sort_three_no_green_ee_state_absolute_molmoact2_v3",
+            "panda_sort_three_all_ee_state_absolute_molmoact2_v3",
+        ],
+        action_key="action",
+        state_keys=["observation.state"],
+        camera_keys=[
+            "observation.images.gripper_cam.rgb",
+            "observation.images.left_cam.left",
+            "observation.images.right_cam.left",
+        ],
+        normalize_gripper=False,
+        setup_type="single franka panda robot arm sorting three colored objects",
+        control_mode="absolute end-effector pose with current EE pose in state",
+        action_horizon=30,
+        action_dim=8,
+        n_action_steps=30,
+    )
+
+
 MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "pre_post_train": build_molmoact2_pre_post_train,
     "droid": build_molmoact2_droid,
@@ -508,4 +534,5 @@ MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "panda_drawer_ee_state_relative": build_molmoact2_panda_drawer_ee_state_relative,
     "panda_stack_two_cup_ee_state_absolute": build_molmoact2_panda_stack_two_cup_ee_state_absolute,
     "panda_multitask_absolute": build_molmoact2_panda_multitask_absolute,
+    "panda_sort_three_absolute_all": build_molmoact2_panda_sort_three_absolute_all,
 }
