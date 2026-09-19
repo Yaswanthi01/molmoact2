@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-panda-six-abs-full-120k-b64
 #SBATCH --account=ka
-#SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
+#SBATCH --partition=gpu_a100_il
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
