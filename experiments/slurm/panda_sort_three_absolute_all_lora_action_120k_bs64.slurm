@@ -1,17 +1,17 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-sort3-all-abs-lora-120k-b64
 #SBATCH --account=ka
-#SBATCH --partition=gpu_a100_il
+#SBATCH --partition=gpu_h100_short
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=03:30:00
+#SBATCH --time=00:30:00
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
 set -euo pipefail
 
-RUN_NAME="panda-sort-three-absolute-all-lora-action-bs64-120k"
+RUN_NAME="${RUN_NAME_OVERRIDE:-panda-sort-three-absolute-all-lora-action-bs64-120k}"
 RUN_GROUP="panda-sort-three-absolute-all"
 CHAIN_ROOT_JOB_ID="${CHAIN_ROOT_JOB_ID:-$SLURM_JOB_ID}"
 CHAIN_LOG_DIR="$HOME/molmoact2/logs/training/$RUN_GROUP/$RUN_NAME/chain-$CHAIN_ROOT_JOB_ID"
@@ -55,7 +55,10 @@ CHECKPOINT_ROOT="$MOLMO_WORKSPACE/checkpoints"
 SAVE_FOLDER="$CHECKPOINT_ROOT/panda-sort-three-absolute-all-lora-action-h30s30-bs64-120k"
 MILESTONE_FOLDER="$CHECKPOINT_ROOT/panda-sort-three-absolute-all-lora-action-h30s30-bs64-120k-milestones"
 TARGET_STEPS=120000
-SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_sort_three_absolute_all_lora_action_120k_bs64.slurm"
+SLURM_SCRIPT="${SLURM_SCRIPT_OVERRIDE:-$HOME/molmoact2/experiments/slurm/panda_sort_three_absolute_all_lora_action_120k_bs64.slurm}"
+NPROC_PER_NODE="${NPROC_PER_NODE:-4}"
+TRAIN_TIME_LIMIT="${TRAIN_TIME_LIMIT:-1200}"
+BATCH_LAYOUT="${BATCH_LAYOUT:-4 GPUs, global batch 64, device microbatch 4 per GPU, gradient accumulation 4}"
 
 mkdir -p logs "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
 
@@ -76,7 +79,7 @@ echo "Training mixture: panda_sort_three_absolute_all (four absolute datasets)"
 echo "Training mode: LoRA VLM with fully trainable action expert"
 echo "Action representation: absolute end-effector pose"
 echo "Training target: step${TARGET_STEPS}"
-echo "Batch layout: 4 GPUs, global batch 64, device microbatch 4 per GPU, gradient accumulation 4"
+echo "Batch layout: $BATCH_LAYOUT"
 if (( starting_step == 0 )); then
   echo "Starting fresh from base checkpoint: allenai/MolmoAct2"
 else
@@ -84,14 +87,14 @@ else
 fi
 echo "Checkpoint folder: ${SAVE_FOLDER}"
 
-torchrun --standalone --nproc-per-node=4 \
+torchrun --standalone --nproc-per-node="$NPROC_PER_NODE" \
   launch_scripts/train_lerobot.py \
   allenai/MolmoAct2 \
   panda_sort_three_absolute_all \
   --frame_loading_backend=av \
   --max_duration=120000 \
   --scheduler.t_max=120000 \
-  --time_limit=12000 \
+  --time_limit="$TRAIN_TIME_LIMIT" \
   --canceled_check_interval=1 \
   --log_interval=10 \
   --device_batch_size=4 \
