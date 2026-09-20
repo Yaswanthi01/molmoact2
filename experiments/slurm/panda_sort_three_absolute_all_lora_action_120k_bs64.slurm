@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-sort3-all-abs-lora-120k-b64
 #SBATCH --account=ka
-#SBATCH --partition=gpu_h100_short,gpu_a100_il,gpu_h100,gpu_h100_il
+#SBATCH --partition=gpu_a100_il
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=00:30:00
+#SBATCH --time=03:30:00
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
@@ -91,7 +91,7 @@ torchrun --standalone --nproc-per-node=4 \
   --frame_loading_backend=av \
   --max_duration=120000 \
   --scheduler.t_max=120000 \
-  --time_limit=1200 \
+  --time_limit=12000 \
   --canceled_check_interval=1 \
   --log_interval=10 \
   --device_batch_size=4 \
