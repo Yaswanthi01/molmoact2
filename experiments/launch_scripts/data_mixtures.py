@@ -576,6 +576,44 @@ def build_molmoact2_panda_three_task_absolute() -> Tuple[List[RawMixtureEntry], 
     )
 
 
+def _build_molmoact2_panda_three_task_with_rates(
+    rates: Sequence[float],
+) -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    """Build the Panda three-task mixture with explicit task-level rates."""
+    repo_ids = [
+        "panda_sort_three_continued_ee_fullres_full_v30",
+        "panda_stack_two_cup_ee_state_absolute_molmoact2_v3",
+        "panda_drawer_ee_state_absolute_molmoact2_v3",
+    ]
+    if len(rates) != len(repo_ids):
+        raise ValueError(f"Expected {len(repo_ids)} Panda task rates, got {len(rates)}.")
+    raw_rates = [float(rate) for rate in rates]
+    if any(rate <= 0.0 for rate in raw_rates):
+        raise ValueError("Panda task rates must all be positive.")
+    rate_total = sum(raw_rates)
+    normalized_rates = [rate / rate_total for rate in raw_rates]
+
+    _, metadata = build_molmoact2_panda_three_task_absolute()
+    tag = "lerobot:panda_ee_state_absolute"
+    mixture = [
+        (tag, [_with_lerobot_prefix(repo_id)], rate)
+        for repo_id, rate in zip(repo_ids, normalized_rates)
+    ]
+    return mixture, metadata
+
+
+def build_molmoact2_panda_three_task_window_proportional() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    """Sample tasks in proportion to their valid 30-step action windows."""
+    return _build_molmoact2_panda_three_task_with_rates(
+        rates=[153_420.0, 51_862.0, 68_090.0],
+    )
+
+
+def build_molmoact2_panda_three_task_equal() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    """Give sorting, cup stacking, and drawer tasks equal sampling priority."""
+    return _build_molmoact2_panda_three_task_with_rates(rates=[1.0, 1.0, 1.0])
+
+
 MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "pre_post_train": build_molmoact2_pre_post_train,
     "droid": build_molmoact2_droid,
@@ -591,4 +629,6 @@ MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "panda_sort_three_absolute_all": build_molmoact2_panda_sort_three_absolute_all,
     "panda_six_task_absolute": build_molmoact2_panda_six_task_absolute,
     "panda_three_task_absolute": build_molmoact2_panda_three_task_absolute,
+    "panda_three_task_window_proportional": build_molmoact2_panda_three_task_window_proportional,
+    "panda_three_task_equal": build_molmoact2_panda_three_task_equal,
 }

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-panda-three-abs-full-120k-b64
 #SBATCH --account=ka
-#SBATCH --partition=gpu_h100,gpu_h100_il,gpu_a100_il
+#SBATCH --partition=gpu_h100_il,gpu_a100_il
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
@@ -11,8 +11,9 @@
 
 set -euo pipefail
 
-RUN_NAME="panda-three-task-absolute-full-bs64-4gpu-120k"
-RUN_GROUP="panda-three-task-absolute"
+RUN_NAME="${RUN_NAME_OVERRIDE:-panda-three-task-absolute-full-bs64-4gpu-120k}"
+RUN_GROUP="${RUN_GROUP_OVERRIDE:-panda-three-task-absolute}"
+TRAINING_MIXTURE="${TRAINING_MIXTURE_OVERRIDE:-panda_three_task_absolute}"
 TARGET_STEPS=120000
 CHAIN_ROOT_JOB_ID="${CHAIN_ROOT_JOB_ID:-$SLURM_JOB_ID}"
 
@@ -46,9 +47,10 @@ DATASET_ROOTS=(
   "$HOME/molmoact2/datasets/panda_stack_two_cup_ee_state_absolute_molmoact2_v3"
 )
 CHECKPOINT_ROOT="$MOLMO_WORKSPACE/checkpoints"
-SAVE_FOLDER="$CHECKPOINT_ROOT/panda-three-task-absolute-full-h30s30-bs64-4gpu-120k"
-MILESTONE_FOLDER="$CHECKPOINT_ROOT/panda-three-task-absolute-full-h30s30-bs64-4gpu-120k-milestones"
-SLURM_SCRIPT="$HOME/molmoact2/experiments/slurm/panda_three_task_absolute_full_120k_bs64.slurm"
+CHECKPOINT_NAME="${CHECKPOINT_NAME_OVERRIDE:-panda-three-task-absolute-full-h30s30-bs64-4gpu-120k}"
+SAVE_FOLDER="$CHECKPOINT_ROOT/$CHECKPOINT_NAME"
+MILESTONE_FOLDER="$CHECKPOINT_ROOT/$CHECKPOINT_NAME-milestones"
+SLURM_SCRIPT="${SLURM_SCRIPT_OVERRIDE:-$HOME/molmoact2/experiments/slurm/panda_three_task_absolute_full_120k_bs64.slurm}"
 
 mkdir -p "$SAVE_FOLDER" "$MILESTONE_FOLDER" "$HF_HOME"
 
@@ -67,7 +69,7 @@ done
 
 echo "Host: $(hostname)"
 echo "Job ID: ${SLURM_JOB_ID}"
-echo "Training mixture: panda_three_task_absolute (drawer + full sort + cup stack)"
+echo "Training mixture: $TRAINING_MIXTURE (drawer + full sort + cup stack)"
 echo "Training mode: full fine-tuning, no LoRA"
 echo "Training target: step${TARGET_STEPS}"
 echo "Batch layout: 4 GPUs, global batch 64, device microbatch 4 per GPU, gradient accumulation 4"
@@ -82,7 +84,7 @@ nvidia-smi
 torchrun --standalone --nproc-per-node=4 \
   launch_scripts/train_lerobot.py \
   allenai/MolmoAct2 \
-  panda_three_task_absolute \
+  "$TRAINING_MIXTURE" \
   --frame_loading_backend=av \
   --max_duration=120000 \
   --scheduler.t_max=120000 \
