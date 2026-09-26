@@ -557,7 +557,7 @@ def build_molmoact2_panda_three_task_absolute() -> Tuple[List[RawMixtureEntry], 
         tag="panda_ee_state_absolute",
         repo_ids=[
             "panda_drawer_ee_state_absolute_molmoact2_v3",
-            "panda_sort_three_continued_ee_fullres_full_v30",
+            "panda_sort_three_continued_ee_state_absolute_molmoact2_v3",
             "panda_stack_two_cup_ee_state_absolute_molmoact2_v3",
         ],
         action_key="action",
@@ -581,7 +581,7 @@ def _build_molmoact2_panda_three_task_with_rates(
 ) -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
     """Build the Panda three-task mixture with explicit task-level rates."""
     repo_ids = [
-        "panda_sort_three_continued_ee_fullres_full_v30",
+        "panda_sort_three_continued_ee_state_absolute_molmoact2_v3",
         "panda_stack_two_cup_ee_state_absolute_molmoact2_v3",
         "panda_drawer_ee_state_absolute_molmoact2_v3",
     ]

@@ -43,7 +43,7 @@ export PYTORCH_ALLOC_CONF="expandable_segments:True"
 
 DATASET_ROOTS=(
   "$HOME/molmoact2/datasets/panda_drawer_ee_state_absolute_molmoact2_v3"
-  "$HOME/molmoact2/datasets/panda_sort_three_continued_ee_fullres_full_v30"
+  "$HOME/molmoact2/datasets/panda_sort_three_continued_ee_state_absolute_molmoact2_v3"
   "$HOME/molmoact2/datasets/panda_stack_two_cup_ee_state_absolute_molmoact2_v3"
 )
 CHECKPOINT_ROOT="$MOLMO_WORKSPACE/checkpoints"
