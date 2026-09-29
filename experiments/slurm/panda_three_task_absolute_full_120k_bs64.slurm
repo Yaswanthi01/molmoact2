@@ -17,6 +17,7 @@ TRAINING_MIXTURE="${TRAINING_MIXTURE_OVERRIDE:-panda_three_task_absolute}"
 TARGET_STEPS=120000
 DEVICE_BATCH_SIZE="${DEVICE_BATCH_SIZE_OVERRIDE:-4}"
 TRAINING_TIME_LIMIT="${TRAINING_TIME_LIMIT_OVERRIDE:-171000}"
+AUTO_RESUBMIT="${AUTO_RESUBMIT_OVERRIDE:-1}"
 CHAIN_ROOT_JOB_ID="${CHAIN_ROOT_JOB_ID:-$SLURM_JOB_ID}"
 
 MOLMO_WORKSPACE="${MOLMO_WORKSPACE:-$(ws_find molmoact2-checkpoints)}"
@@ -133,23 +134,27 @@ done
 
 echo "Latest completed checkpoint: step${latest_step}"
 if (( latest_step < TARGET_STEPS )); then
-  echo "Target is step${TARGET_STEPS}; submitting the next segment."
-  submitted=0
-  for attempt in {1..10}; do
-    if next_job_output="$(sbatch \
-      --dependency="afterok:${SLURM_JOB_ID}" \
-      --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID},MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
-      "$SLURM_SCRIPT" 2>&1)"; then
-      echo "$next_job_output"
-      submitted=1
-      break
+  if [[ "$AUTO_RESUBMIT" == "1" ]]; then
+    echo "Target is step${TARGET_STEPS}; submitting the next segment."
+    submitted=0
+    for attempt in {1..10}; do
+      if next_job_output="$(sbatch \
+        --dependency="afterok:${SLURM_JOB_ID}" \
+        --export="ALL,CHAIN_ROOT_JOB_ID=${CHAIN_ROOT_JOB_ID},MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
+        "$SLURM_SCRIPT" 2>&1)"; then
+        echo "$next_job_output"
+        submitted=1
+        break
+      fi
+      echo "Submission attempt ${attempt} failed: ${next_job_output}" >&2
+      sleep 30
+    done
+    if (( submitted == 0 )); then
+      echo "Could not submit the next segment after 10 attempts." >&2
+      exit 1
     fi
-    echo "Submission attempt ${attempt} failed: ${next_job_output}" >&2
-    sleep 30
-  done
-  if (( submitted == 0 )); then
-    echo "Could not submit the next segment after 10 attempts." >&2
-    exit 1
+  else
+    echo "Target is step${TARGET_STEPS}; external runner will submit the next segment."
   fi
 else
   echo "Training target reached at step${latest_step}."

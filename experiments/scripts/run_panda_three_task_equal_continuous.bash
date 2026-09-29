@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+
+TARGET_STEPS="${TARGET_STEPS:-120000}"
+POLL_SECONDS="${POLL_SECONDS:-30}"
+RETRY_SECONDS="${RETRY_SECONDS:-60}"
+MAX_CONSECUTIVE_FAILURES="${MAX_CONSECUTIVE_FAILURES:-3}"
+JOB_NAME="molmoact2-panda-three-equal-full-120k-b64"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SLURM_SCRIPT="$REPO_ROOT/experiments/slurm/panda_three_task_equal_full_120k_bs64.slurm"
+MOLMO_WORKSPACE="${MOLMO_WORKSPACE:-$(ws_find molmoact2-checkpoints)}"
+CHECKPOINT_DIR="$MOLMO_WORKSPACE/checkpoints/panda-three-task-equal-full-h30s30-bs64-4gpu-120k"
+
+if [[ ! -f "$SLURM_SCRIPT" ]]; then
+  echo "Slurm script not found: $SLURM_SCRIPT" >&2
+  exit 1
+fi
+if [[ ! -d "$MOLMO_WORKSPACE" || ! -w "$MOLMO_WORKSPACE" ]]; then
+  echo "Workspace is unavailable or not writable: $MOLMO_WORKSPACE" >&2
+  exit 1
+fi
+
+latest_step() {
+  local latest=0 checkpoint step
+  for checkpoint in "$CHECKPOINT_DIR"/step*; do
+    [[ -d "$checkpoint" ]] || continue
+    step="${checkpoint##*/step}"
+    if [[ "$step" =~ ^[0-9]+$ ]] && (( step > latest )); then
+      latest="$step"
+    fi
+  done
+  printf '%s\n' "$latest"
+}
+
+active_job() {
+  squeue -h -u "$USER" -n "$JOB_NAME" -o '%A' | head -n 1
+}
+
+job_state() {
+  local state
+  state="$(sacct -X -n -P -j "$1" -o State 2>/dev/null | head -n 1 | cut -d '|' -f 1)"
+  printf '%s\n' "${state%%+*}"
+}
+
+echo "Watching equal-weight training until step${TARGET_STEPS}."
+echo "Checkpoint directory: $CHECKPOINT_DIR"
+echo "Press Ctrl-C to stop the watcher; an active Slurm job will continue."
+
+consecutive_failures=0
+while true; do
+  step="$(latest_step)"
+  if (( step >= TARGET_STEPS )); then
+    echo "Training target reached at step${step}."
+    exit 0
+  fi
+
+  job_id="$(active_job)"
+  if [[ -z "$job_id" ]]; then
+    if ! job_id="$(sbatch --parsable \
+      --export="ALL,AUTO_RESUBMIT_OVERRIDE=0,MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
+      "$SLURM_SCRIPT")"; then
+      echo "Submission failed; retrying in ${RETRY_SECONDS} seconds." >&2
+      sleep "$RETRY_SECONDS"
+      continue
+    fi
+    job_id="${job_id%%;*}"
+    echo "Submitted equal-weight segment as job ${job_id} from step${step}."
+  else
+    echo "Watching existing equal-weight job ${job_id} from step${step}."
+  fi
+
+  while squeue -h -j "$job_id" | grep -q .; do
+    sleep "$POLL_SECONDS"
+  done
+
+  state="$(job_state "$job_id")"
+  step="$(latest_step)"
+  echo "Job ${job_id} ended with state ${state:-UNKNOWN}; latest checkpoint is step${step}."
+
+  if [[ "$state" == "COMPLETED" ]]; then
+    consecutive_failures=0
+  else
+    ((consecutive_failures += 1))
+    if (( consecutive_failures >= MAX_CONSECUTIVE_FAILURES )); then
+      echo "Stopping after ${consecutive_failures} consecutive unsuccessful jobs." >&2
+      exit 1
+    fi
+  fi
+
+  sleep "$RETRY_SECONDS"
+done
