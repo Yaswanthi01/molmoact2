@@ -83,9 +83,20 @@ while true; do
     echo "Watching existing equal-weight job ${job_id} from step${step}."
   fi
 
+  environment_retry=0
   while true; do
     queue_status="$(squeue -h -j "$job_id" -o '%T | elapsed %M | start %S | %R')"
     [[ -n "$queue_status" ]] || break
+    if [[ "${queue_status,,}" == *"user env retrieval failed"* ]]; then
+      printf '\n'
+      echo "Job ${job_id} has an environment-retrieval hold; cancelling it for a clean retry."
+      scancel "$job_id"
+      environment_retry=1
+      while squeue -h -j "$job_id" | grep -q .; do
+        sleep 2
+      done
+      break
+    fi
     step="$(reported_step "$job_id")"
     printf '\r[%s] job %s | %s | last logged step %s\033[K' \
       "$(date '+%F %T')" "$job_id" "$queue_status" "$step"
@@ -104,6 +115,9 @@ while true; do
     if (( consecutive_failures >= MAX_CONSECUTIVE_FAILURES )); then
       echo "Stopping after ${consecutive_failures} consecutive unsuccessful jobs." >&2
       exit 1
+    fi
+    if (( environment_retry == 1 )); then
+      echo "Retrying after the environment-retrieval failure in ${RETRY_SECONDS} seconds."
     fi
   fi
 
