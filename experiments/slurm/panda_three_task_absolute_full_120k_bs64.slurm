@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-panda-three-abs-full-120k-b64
 #SBATCH --account=ka
-#SBATCH --partition=gpu_h100_short
+#SBATCH --partition=gpu_h100_il,gpu_a100_il
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=00:30:00
+#SBATCH --time=48:00:00
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
@@ -15,6 +15,8 @@ RUN_NAME="${RUN_NAME_OVERRIDE:-panda-three-task-absolute-full-bs64-4gpu-120k}"
 RUN_GROUP="${RUN_GROUP_OVERRIDE:-panda-three-task-absolute}"
 TRAINING_MIXTURE="${TRAINING_MIXTURE_OVERRIDE:-panda_three_task_absolute}"
 TARGET_STEPS=120000
+DEVICE_BATCH_SIZE="${DEVICE_BATCH_SIZE_OVERRIDE:-4}"
+TRAINING_TIME_LIMIT="${TRAINING_TIME_LIMIT_OVERRIDE:-171000}"
 CHAIN_ROOT_JOB_ID="${CHAIN_ROOT_JOB_ID:-$SLURM_JOB_ID}"
 
 MOLMO_WORKSPACE="${MOLMO_WORKSPACE:-$(ws_find molmoact2-checkpoints)}"
@@ -72,7 +74,7 @@ echo "Job ID: ${SLURM_JOB_ID}"
 echo "Training mixture: $TRAINING_MIXTURE (drawer + full sort + cup stack)"
 echo "Training mode: full fine-tuning, no LoRA"
 echo "Training target: step${TARGET_STEPS}"
-echo "Batch layout: 4 GPUs, global batch 64, device microbatch 4 per GPU, gradient accumulation 4"
+echo "Batch layout: 4 GPUs, global batch 64, device microbatch ${DEVICE_BATCH_SIZE} per GPU, gradient accumulation $((64 / (4 * DEVICE_BATCH_SIZE)))"
 if (( starting_step == 0 )); then
   echo "Starting fresh from base checkpoint: allenai/MolmoAct2"
 else
@@ -88,10 +90,10 @@ torchrun --standalone --nproc-per-node=4 \
   --frame_loading_backend=av \
   --max_duration=120000 \
   --scheduler.t_max=120000 \
-  --time_limit=1200 \
+  --time_limit="$TRAINING_TIME_LIMIT" \
   --canceled_check_interval=1 \
   --log_interval=10 \
-  --device_batch_size=4 \
+  --device_batch_size="$DEVICE_BATCH_SIZE" \
   --global_batch_size=64 \
   --num_workers=4 \
   --pin_memory=true \

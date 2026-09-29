@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=molmoact2-panda-three-window-full-120k-b64
 #SBATCH --account=ka
-#SBATCH --partition=gpu_h100_short
+#SBATCH --partition=gpu_h100_il,gpu_a100_il
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
-#SBATCH --time=00:30:00
+#SBATCH --time=48:00:00
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
