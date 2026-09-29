@@ -72,9 +72,7 @@ while true; do
 
   job_id="$(active_job)"
   if [[ -z "$job_id" ]]; then
-    if ! job_id="$(sbatch --parsable \
-      --export="ALL,AUTO_RESUBMIT_OVERRIDE=0,MOLMO_WORKSPACE=${MOLMO_WORKSPACE}" \
-      "$SLURM_SCRIPT")"; then
+    if ! job_id="$(sbatch --parsable "$SLURM_SCRIPT")"; then
       echo "Submission failed; retrying in ${RETRY_SECONDS} seconds." >&2
       sleep "$RETRY_SECONDS"
       continue
