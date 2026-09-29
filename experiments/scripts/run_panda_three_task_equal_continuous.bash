@@ -13,6 +13,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SLURM_SCRIPT="$REPO_ROOT/experiments/slurm/panda_three_task_equal_full_120k_bs64.slurm"
 MOLMO_WORKSPACE="${MOLMO_WORKSPACE:-$(ws_find molmoact2-checkpoints)}"
 CHECKPOINT_DIR="$MOLMO_WORKSPACE/checkpoints/panda-three-task-equal-full-h30s30-bs64-4gpu-120k"
+LOG_ROOT="$MOLMO_WORKSPACE/logs/training/panda-three-task-weighting"
 
 if [[ ! -f "$SLURM_SCRIPT" ]]; then
   echo "Slurm script not found: $SLURM_SCRIPT" >&2
@@ -45,6 +46,18 @@ job_state() {
   printf '%s\n' "${state%%+*}"
 }
 
+reported_step() {
+  local job_id="$1" log_file="" step=""
+  log_file="$(find "$LOG_ROOT" -type f -name "*-${job_id}.out" -print -quit 2>/dev/null)"
+  if [[ -n "$log_file" ]]; then
+    step="$(grep -oE '\[step=[0-9]+/' "$log_file" 2>/dev/null | tail -n 1 | tr -cd '0-9')"
+  fi
+  if [[ -z "$step" ]]; then
+    step="$(latest_step)"
+  fi
+  printf '%s\n' "$step"
+}
+
 echo "Watching equal-weight training until step${TARGET_STEPS}."
 echo "Checkpoint directory: $CHECKPOINT_DIR"
 echo "Press Ctrl-C to stop the watcher; an active Slurm job will continue."
@@ -72,9 +85,15 @@ while true; do
     echo "Watching existing equal-weight job ${job_id} from step${step}."
   fi
 
-  while squeue -h -j "$job_id" | grep -q .; do
+  while true; do
+    queue_status="$(squeue -h -j "$job_id" -o '%T | elapsed %M | start %S | %R')"
+    [[ -n "$queue_status" ]] || break
+    step="$(reported_step "$job_id")"
+    printf '\r[%s] job %s | %s | last logged step %s\033[K' \
+      "$(date '+%F %T')" "$job_id" "$queue_status" "$step"
     sleep "$POLL_SECONDS"
   done
+  printf '\n'
 
   state="$(job_state "$job_id")"
   step="$(latest_step)"
