@@ -183,7 +183,17 @@ for step in (10000, 20000):
         )
     )
 
-assert len(CHECKPOINTS) == 55
+CHECKPOINTS.append(
+    _entry(
+        "three-task",
+        "alpha1-window-proportional",
+        ("panda-three-task-window-proportional-full-h30s30-bs64-4gpu-120k",),
+        "step30000",
+        30000,
+    )
+)
+
+assert len(CHECKPOINTS) == 56
 
 
 def selected(start: int, end: int) -> list[tuple[int, dict]]:
